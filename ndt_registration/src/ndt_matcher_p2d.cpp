@@ -14,30 +14,30 @@ void NDTMatcherP2D::init(bool useDefaultGridResolutions, std::vector<double> _re
 {
 
     ///////////
-    double lfc1,lfc2,lfd3;
+    double lfc1, lfc2, lfd3;
     double integral, outlier_ratio, support_size;
     integral = 0.1;
     outlier_ratio = 0.01;
     //outlier_ratio = 0.5;
     support_size = 4; //???
-    lfc1 = (1-outlier_ratio)/integral;
-    lfc2 = outlier_ratio/pow(support_size,3);
+    lfc1 = (1 - outlier_ratio) / integral;
+    lfc2 = outlier_ratio / pow(support_size, 3);
     lfd3 = -log(lfc2);
-    lfd1 = -log( lfc1 + lfc2 ) - lfd3;
-    lfd2 = -log((-log( lfc1 * exp( -0.5 ) + lfc2 ) - lfd3 ) / lfd1);
+    lfd1 = -log(lfc1 + lfc2) - lfd3;
+    lfd2 = -log((-log(lfc1 * exp(-0.5) + lfc2) - lfd3) / lfd1);
     //d1 = 0.1;
     //d2 = 0.001;
     //cout<<lfd1<<" "<<lfd2<<endl;
     ///////////
     useSimpleDerivatives = false;
     Jest.setZero();
-    Jest.block<3,3>(0,0).setIdentity();
+    Jest.block<3, 3>(0, 0).setIdentity();
     Hest.setZero();
     NUMBER_OF_ACTIVE_CELLS = 0;
     ITR_MAX = 100;
     subsample_size = 0.4;
 
-    if(useDefaultGridResolutions)
+    if (useDefaultGridResolutions)
     {
         resolutions.push_back(0.2);
         resolutions.push_back(0.5);
@@ -53,238 +53,241 @@ void NDTMatcherP2D::init(bool useDefaultGridResolutions, std::vector<double> _re
     precomputeAngleDerivatives(tt);
 }
 
-void NDTMatcherP2D::generateScoreDebug(const char* out, pcl::PointCloud<pcl::PointXYZ>& fixed,
-        pcl::PointCloud<pcl::PointXYZ>& moving)
+void NDTMatcherP2D::generateScoreDebug(const char *out, pcl::PointCloud<pcl::PointXYZ> &fixed,
+                                       pcl::PointCloud<pcl::PointXYZ> &moving)
 {
 
-    std::ofstream lg(out,std::ios_base::out);
+    std::ofstream lg(out, std::ios_base::out);
     int N_LINEAR = 100;
-    int N_ROT	 = 100;
+    int N_ROT = 100;
 
-    std::cout<<"generating scores...\n";
-    for(int q = resolutions.size()-1; q>=0; q--)
+    std::cout << "generating scores...\n";
+    for (int q = resolutions.size() - 1; q >= 0; q--)
     {
         current_resolution = resolutions[q];
-        std::cout<<"res "<<current_resolution<<std::endl;
-        double lfc1,lfc2,lfd3;
+        std::cout << "res " << current_resolution << std::endl;
+        double lfc1, lfc2, lfd3;
         double integral, outlier_ratio, support_size;
         integral = 0.1;
         outlier_ratio = 0.35;
         support_size = current_resolution;
-        lfc1 = (1-outlier_ratio)/integral;
-        lfc2 = outlier_ratio/pow(support_size,3);
+        lfc1 = (1 - outlier_ratio) / integral;
+        lfc2 = outlier_ratio / pow(support_size, 3);
         lfd3 = -log(lfc2);
-        lfd1 = -(-log( lfc1 + lfc2 ) - lfd3);
-        lfd2 = -log((-log( lfc1 * exp( -0.5 ) + lfc2 ) - lfd3 ) / -lfd1);
+        lfd1 = -(-log(lfc1 + lfc2) - lfd3);
+        lfd2 = -log((-log(lfc1 * exp(-0.5) + lfc2) - lfd3) / -lfd1);
 
-        double lmin=-2, lmax=2, rmin=-M_PI/2, rmax=M_PI/2;
-        double lstep = (lmax-lmin)/(N_LINEAR-1);
-        double rstep = (rmax-rmin)/(N_ROT-1);
-        Eigen::MatrixXd S(6,N_LINEAR);
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> T;
+        double lmin = -2, lmax = 2, rmin = -M_PI / 2, rmax = M_PI / 2;
+        double lstep = (lmax - lmin) / (N_LINEAR - 1);
+        double rstep = (rmax - rmin) / (N_ROT - 1);
+        Eigen::MatrixXd S(6, N_LINEAR);
+        Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> T;
 
         LazyGrid prototype(current_resolution);
-        NDTMap ndt( &prototype );
-        ndt.loadPointCloud( fixed );
+        NDTMap ndt(&prototype);
+        ndt.loadPointCloud(fixed);
         ndt.computeNDTCells();
 
-        int k=0;
-        for(double x=lmin; x<lmax; x+=lstep)
+        int k = 0;
+        for (double x = lmin; x < lmax; x += lstep)
         {
-            T = Eigen::Translation<double,3>(x,0,0);
+            T = Eigen::Translation<double, 3>(x, 0, 0);
             //T = Eigen::Transform<double,3>(x,0,0);
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
 
-            S(0,k) = scorePointCloud(cloud,ndt);
+            S(0, k) = scorePointCloud(cloud, ndt);
             k++;
         }
-        k=0;
-        for(double x=lmin; x<lmax; x+=lstep)
+        k = 0;
+        for (double x = lmin; x < lmax; x += lstep)
         {
-            T = Eigen::Translation<double,3>(0,x,0);
+            T = Eigen::Translation<double, 3>(0, x, 0);
             //T = Eigen::Transform<double,3>(0,x,0);
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
 
-            S(1,k) = scorePointCloud(cloud,ndt);
+            S(1, k) = scorePointCloud(cloud, ndt);
             k++;
         }
-        k=0;
-        for(double x=lmin; x<lmax; x+=lstep)
+        k = 0;
+        for (double x = lmin; x < lmax; x += lstep)
         {
-            T = Eigen::Translation<double,3>(0.,0.,x);
+            T = Eigen::Translation<double, 3>(0., 0., x);
             //T = Eigen::Transform<double,3>(0.,0.,x);
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
 
-            S(2,k) = scorePointCloud(cloud,ndt);
+            S(2, k) = scorePointCloud(cloud, ndt);
             k++;
         }
 
-        k=0;
-        for(double r=rmin; r<rmax; r+=rstep)
+        k = 0;
+        for (double r = rmin; r < rmax; r += rstep)
         {
-            T = Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitX()) *
-                Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitY()) *
-                Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitZ()) ;
+            T = Eigen::AngleAxis<double>(r, Eigen::Vector3d::UnitX()) *
+                Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitZ());
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
-            S(3,k) = scorePointCloud(cloud,ndt);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
+            S(3, k) = scorePointCloud(cloud, ndt);
             k++;
         }
-        k=0;
-        for(double r=rmin; r<rmax; r+=rstep)
+        k = 0;
+        for (double r = rmin; r < rmax; r += rstep)
         {
-            T = Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitX()) *
-                Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitY()) *
-                Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitZ()) ;
+            T = Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitX()) *
+                Eigen::AngleAxis<double>(r, Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitZ());
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
 
-            S(4,k) = scorePointCloud(cloud,ndt);
+            S(4, k) = scorePointCloud(cloud, ndt);
             k++;
         }
-        k=0;
-        for(double r=rmin; r<rmax; r+=rstep)
+        k = 0;
+        for (double r = rmin; r < rmax; r += rstep)
         {
-            T = Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitX()) *
-                Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitY()) *
-                Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitZ()) ;
+            T = Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitX()) *
+                Eigen::AngleAxis<double>(0, Eigen::Vector3d::UnitY()) *
+                Eigen::AngleAxis<double>(r, Eigen::Vector3d::UnitZ());
             pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-            lslgeneric::transformPointCloudInPlace(T,cloud);
+            lslgeneric::transformPointCloudInPlace(T, cloud);
 
-            S(5,k) = scorePointCloud(cloud,ndt);
+            S(5, k) = scorePointCloud(cloud, ndt);
             k++;
         }
 
-        lg<<"Sp2f"<<(int)current_resolution<<" = ["<<S<<"];\n";
+        lg << "Sp2f" << (int)current_resolution << " = [" << S << "];\n";
     }
     lg.close();
-
 }
 
-bool NDTMatcherP2D::match( pcl::PointCloud<pcl::PointXYZ>& target,
-        pcl::PointCloud<pcl::PointXYZ>& source,
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T )
+bool NDTMatcherP2D::match(pcl::PointCloud<pcl::PointXYZ> &target,
+                          pcl::PointCloud<pcl::PointXYZ> &source,
+                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T)
 {
 
-    Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> Temp;
+    Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> Temp;
     T.setIdentity();
 
     bool ret;
     pcl::PointCloud<pcl::PointXYZ> moving;
-    if(subsample_size > 0) {
-	moving = subsample(source);
-    } else {
-	moving = source;
+    if (subsample_size > 0)
+    {
+        moving = subsample(source);
+    }
+    else
+    {
+        moving = source;
     }
     //std::cerr<<"subsampled points size is "<<moving.points.size()<<std::endl;
     //iterative regular grid
-    for(int i=resolutions.size()-1; i>=0; i--) {
-	current_resolution = resolutions[i];
-	//std::cerr<<"RESOLUTION: "<<current_resolution<<std::endl;
-	//for(current_resolution = 2; current_resolution >= 0.5; current_resolution = current_resolution/2)
+    for (int i = resolutions.size() - 1; i >= 0; i--)
+    {
+        current_resolution = resolutions[i];
+        //std::cerr<<"RESOLUTION: "<<current_resolution<<std::endl;
+        //for(current_resolution = 2; current_resolution >= 0.5; current_resolution = current_resolution/2)
 
-	LazyGrid prototype(current_resolution);
-	NDTMap ndt( &prototype );
-	ndt.loadPointCloud( target );
-	ndt.computeNDTCells();
+        LazyGrid prototype(current_resolution);
+        NDTMap ndt(&prototype);
+        ndt.loadPointCloud(target);
+        ndt.computeNDTCells();
 
-	ret = this->match( ndt, moving, Temp );
-	T = Temp*T;
-	//transform moving
-	lslgeneric::transformPointCloudInPlace(Temp,moving);
+        ret = this->match(ndt, moving, Temp);
+        T = Temp * T;
+        //transform moving
+        lslgeneric::transformPointCloudInPlace(Temp, moving);
 #ifdef DO_DEBUG_PROC
-	Eigen::Vector3d out = Temp.rotation().eulerAngles(0,1,2);
-	std::cout<<"OUT: "<<out.transpose()<<std::endl;
-	std::cout<<"translation "<<Temp.translation().transpose()<<std::endl;
-	//cout<<"--------------------------------------------------------\n";
+        Eigen::Vector3d out = Temp.rotation().eulerAngles(0, 1, 2);
+        std::cout << "OUT: " << out.transpose() << std::endl;
+        std::cout << "translation " << Temp.translation().transpose() << std::endl;
+        //cout<<"--------------------------------------------------------\n";
 #endif
     }
 
     return ret;
 }
 
-bool NDTMatcherP2D::covariance( pcl::PointCloud<pcl::PointXYZ>& target,
-        pcl::PointCloud<pcl::PointXYZ>& source,
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T,
-        Eigen::Matrix<double,6,6> &cov
-                                                       )
+bool NDTMatcherP2D::covariance(pcl::PointCloud<pcl::PointXYZ> &target,
+                               pcl::PointCloud<pcl::PointXYZ> &source,
+                               Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,
+                               Eigen::Matrix<double, 6, 6> &cov)
 {
 
-    Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> TR;
+    Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> TR;
     pcl::PointCloud<pcl::PointXYZ> cloud = source;
-    lslgeneric::transformPointCloudInPlace(T,cloud);
+    lslgeneric::transformPointCloudInPlace(T, cloud);
 
     LazyGrid prototype(current_resolution);
-    NDTMap ndt( &prototype );
-    ndt.loadPointCloud( target );
+    NDTMap ndt(&prototype);
+    ndt.loadPointCloud(target);
     ndt.computeNDTCells();
 
     TR.setIdentity();
-    Eigen::Matrix<double,6,1> sc;
-    derivativesPointCloud(cloud,ndt,TR,sc,cov,true);
+    Eigen::Matrix<double, 6, 1> sc;
+    derivativesPointCloud(cloud, ndt, TR, sc, cov, true);
     // "cov", at this point, is the Hessian multiplied by -1
 
     // Make sure that the Hessian is invertible
-    Eigen::FullPivLU<Eigen::Matrix<double,6,6> > dec(cov);
-    Eigen::Matrix<double,6,6> invH;
+    Eigen::FullPivLU<Eigen::Matrix<double, 6, 6>> dec(cov);
+    Eigen::Matrix<double, 6, 6> invH;
     if (dec.isInvertible())
     {
-      std::cout << "nice, we have invertible Hessian\n" << cov << "\n";
+        std::cout << "nice, we have invertible Hessian\n"
+                  << cov << "\n";
     }
     else
     {
-      std::cerr << "Hessian is not invertible:\n" << cov << "\n";
-      return false;
+        std::cerr << "Hessian is not invertible:\n"
+                  << cov << "\n";
+        return false;
     }
     invH = dec.inverse();
-    cov = 0.5*invH;    
+    cov = 0.5 * invH;
     //cov = 0.5*cov.inverse();
-
 
     return true;
 }
 
-bool NDTMatcherP2D::match( NDTMap& targetNDT,
-        pcl::PointCloud<pcl::PointXYZ>& source,
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T )
+bool NDTMatcherP2D::match(NDTMap &targetNDT,
+                          pcl::PointCloud<pcl::PointXYZ> &source,
+                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T)
 {
     ///////////
-    double lfc1,lfc2,lfd3;
+    double lfc1, lfc2, lfd3;
     double integral, outlier_ratio, support_size;
     integral = 0.1;
     outlier_ratio = 0.35;
     //outlier_ratio = 0.35;
     support_size = current_resolution; //???
-    lfc1 = (1-outlier_ratio)/integral;
-    lfc2 = outlier_ratio/pow(support_size,3);
+    lfc1 = (1 - outlier_ratio) / integral;
+    lfc2 = outlier_ratio / pow(support_size, 3);
     lfd3 = -log(lfc2);
-    lfd1 = -log( lfc1 + lfc2 ) - lfd3;
-    lfd2 = -log((-log( lfc1 * exp( -0.5 ) + lfc2 ) - lfd3 ) / lfd1);
+    lfd1 = -log(lfc1 + lfc2) - lfd3;
+    lfd2 = -log((-log(lfc1 * exp(-0.5) + lfc2) - lfd3) / lfd1);
     //d1 = 0.1;
     //d2 = 0.001;
     //cout<<lfd1<<" "<<lfd2<<endl;
     ///////////
     useSimpleDerivatives = true;
     Jest.setZero();
-    Jest.block<3,3>(0,0).setIdentity();
+    Jest.block<3, 3>(0, 0).setIdentity();
     Hest.setZero();
 
     //locals
     //int ITR_MAX = 10;
     bool convergence = false;
-    double score=0;
+    double score = 0;
     double DELTA_SCORE = 0.0001;
-//    double NORM_MAX = support_size/8, ROT_MAX = M_PI/18; //
-    double NORM_MAX = 4*support_size, ROT_MAX = M_PI/4; //
+    //    double NORM_MAX = support_size/8, ROT_MAX = M_PI/18; //
+    double NORM_MAX = 4 * support_size, ROT_MAX = M_PI / 4; //
     int itr_ctr = 0;
     double step_size = 1;
-    Eigen::Matrix<double,6,1> pose_increment_v, pose_increment_reg_v, score_gradient, scg; //column vectors
-    Eigen::Matrix<double,6,6> Hessian;
+    Eigen::Matrix<double, 6, 1> pose_increment_v, pose_increment_reg_v, score_gradient, scg; //column vectors
+    Eigen::Matrix<double, 6, 6> Hessian;
     Eigen::Matrix3d cov;
-    Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> TR, Tbest;
+    Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> TR, Tbest;
     Eigen::Vector3d transformed_vec, mean;
     bool ret = true;
 
@@ -293,12 +296,12 @@ bool NDTMatcherP2D::match( NDTMap& targetNDT,
     nextCloud = source;
     T.setIdentity();
     TR.setIdentity();
-    Eigen::Vector3d eulerAngles = T.rotation().eulerAngles(0,1,2);
+    Eigen::Vector3d eulerAngles = T.rotation().eulerAngles(0, 1, 2);
 
     double scoreP = 0;
     double score_best = INT_MAX;
-    
-    while(!convergence)
+
+    while (!convergence)
     {
 
         score_gradient.setZero();
@@ -306,39 +309,38 @@ bool NDTMatcherP2D::match( NDTMap& targetNDT,
         //derivativesPointCloud(source,targetNDT,T,score_gradient,Hessian,true);
 
         TR.setIdentity();
-        derivativesPointCloud(prevCloud,targetNDT,TR,score_gradient,Hessian,true);
-	scg = score_gradient;
+        derivativesPointCloud(prevCloud, targetNDT, TR, score_gradient, Hessian, true);
+        scg = score_gradient;
 
-	Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,6,6> > Sol (Hessian);
-        Eigen::Matrix<double,6,1> evals = Sol.eigenvalues().real();
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> Sol(Hessian);
+        Eigen::Matrix<double, 6, 1> evals = Sol.eigenvalues().real();
         double minCoeff = evals.minCoeff();
         double maxCoeff = evals.maxCoeff();
-	if(minCoeff < 0)  //|| evals.minCoeff()) // < 10e-5*evals.maxCoeff()) 
-	{
-	//    std::cerr<<"Hessian near singular "<<evals.transpose()<<std::endl;
-	    Eigen::Matrix<double,6,6> evecs = Sol.eigenvectors().real();
-	    double regularizer = score_gradient.norm();
-	    regularizer = regularizer + minCoeff > 0 ? regularizer : 0.001*maxCoeff - minCoeff;
-	    //double regularizer = 0.001*maxCoeff - minCoeff;
-	    Eigen::Matrix<double,6,1> reg;
-	    //ugly
-	    reg<<regularizer,regularizer,regularizer,regularizer,regularizer,regularizer;
-	    evals += reg;
-	    Eigen::Matrix<double,6,6> Lam;
-	    Lam = evals.asDiagonal();
-	    Hessian = evecs*Lam*(evecs.transpose());
-	}
-        
-	pose_increment_v = Hessian.ldlt().solve(-score_gradient);
+        if (minCoeff < 0) //|| evals.minCoeff()) // < 10e-5*evals.maxCoeff())
+        {
+            //    std::cerr<<"Hessian near singular "<<evals.transpose()<<std::endl;
+            Eigen::Matrix<double, 6, 6> evecs = Sol.eigenvectors().real();
+            double regularizer = score_gradient.norm();
+            regularizer = regularizer + minCoeff > 0 ? regularizer : 0.001 * maxCoeff - minCoeff;
+            //double regularizer = 0.001*maxCoeff - minCoeff;
+            Eigen::Matrix<double, 6, 1> reg;
+            //ugly
+            reg << regularizer, regularizer, regularizer, regularizer, regularizer, regularizer;
+            evals += reg;
+            Eigen::Matrix<double, 6, 6> Lam;
+            Lam = evals.asDiagonal();
+            Hessian = evecs * Lam * (evecs.transpose());
+        }
 
-        score = scorePointCloud(prevCloud,targetNDT);
-	if(score < score_best) 
-	{
-	    Tbest = T;
-	    score_best = score;
-	}
-	//std::cerr<<"iteration "<<itr_ctr<<" pose norm "<<(pose_increment_v.norm())<<" score "<<score<<std::endl;
-        
+        pose_increment_v = Hessian.ldlt().solve(-score_gradient);
+
+        score = scorePointCloud(prevCloud, targetNDT);
+        if (score < score_best)
+        {
+            Tbest = T;
+            score_best = score;
+        }
+        //std::cerr<<"iteration "<<itr_ctr<<" pose norm "<<(pose_increment_v.norm())<<" score "<<score<<std::endl;
 
 //step control...
 #if 0
@@ -364,12 +366,12 @@ bool NDTMatcherP2D::match( NDTMap& targetNDT,
 //	cout<<"dg    "<<pose_increment_v.dot(score_gradient)<<endl;
 #endif
         TR.setIdentity();
-        TR =  Eigen::Translation<double,3>(pose_increment_v(0),pose_increment_v(1),pose_increment_v(2))*
-              Eigen::AngleAxis<double>(pose_increment_v(3),Eigen::Vector3d::UnitX()) *
-              Eigen::AngleAxis<double>(pose_increment_v(4),Eigen::Vector3d::UnitY()) *
-              Eigen::AngleAxis<double>(pose_increment_v(5),Eigen::Vector3d::UnitZ()) ;
+        TR = Eigen::Translation<double, 3>(pose_increment_v(0), pose_increment_v(1), pose_increment_v(2)) *
+             Eigen::AngleAxis<double>(pose_increment_v(3), Eigen::Vector3d::UnitX()) *
+             Eigen::AngleAxis<double>(pose_increment_v(4), Eigen::Vector3d::UnitY()) *
+             Eigen::AngleAxis<double>(pose_increment_v(5), Eigen::Vector3d::UnitZ());
 
-    /*    double dginit = pose_increment_v.dot(scg);
+        /*    double dginit = pose_increment_v.dot(scg);
         if (score_gradient.norm()<= DELTA_SCORE || dginit > 0)
         {
 	    //std::cerr<<"Termination\n";
@@ -380,134 +382,131 @@ bool NDTMatcherP2D::match( NDTMap& targetNDT,
 	    return true;
 	}
     */
-        step_size = lineSearchMT(score_gradient,pose_increment_v,prevCloud,TR,targetNDT);
-        if(step_size < 0)
+        step_size = lineSearchMT(score_gradient, pose_increment_v, prevCloud, TR, targetNDT);
+        if (step_size < 0)
         {
             //    cout<<"can't decrease in this direction any more, done \n";
             return true;
         }
-        pose_increment_v = step_size*pose_increment_v;
+        pose_increment_v = step_size * pose_increment_v;
 
-
-//	cout<<"incr= ["<<pose_increment_v.transpose()<<"]"<<endl;
+        //	cout<<"incr= ["<<pose_increment_v.transpose()<<"]"<<endl;
         TR.setIdentity();
-        TR =  Eigen::Translation<double,3>(pose_increment_v(0),pose_increment_v(1),pose_increment_v(2))*
-              Eigen::AngleAxis<double>(pose_increment_v(3),Eigen::Vector3d::UnitX()) *
-              Eigen::AngleAxis<double>(pose_increment_v(4),Eigen::Vector3d::UnitY()) *
-              Eigen::AngleAxis<double>(pose_increment_v(5),Eigen::Vector3d::UnitZ()) ;
-        T = TR*T;
+        TR = Eigen::Translation<double, 3>(pose_increment_v(0), pose_increment_v(1), pose_increment_v(2)) *
+             Eigen::AngleAxis<double>(pose_increment_v(3), Eigen::Vector3d::UnitX()) *
+             Eigen::AngleAxis<double>(pose_increment_v(4), Eigen::Vector3d::UnitY()) *
+             Eigen::AngleAxis<double>(pose_increment_v(5), Eigen::Vector3d::UnitZ());
+        T = TR * T;
 
         //eulerAngles<<pose_increment_v(3),pose_increment_v(4),pose_increment_v(5);
         //eulerAngles = T.rotation().eulerAngles(0,1,2);
 
-        prevCloud = lslgeneric::transformPointCloud<pcl::PointXYZ>(T,source);
+        prevCloud = lslgeneric::transformPointCloud<pcl::PointXYZ>(T, source);
         scoreP = score;
-        score = scorePointCloud(prevCloud,targetNDT);
-	if(score < score_best) 
-	{
-	    Tbest = T;
-	    score_best = score;
-	}
+        score = scorePointCloud(prevCloud, targetNDT);
+        if (score < score_best)
+        {
+            Tbest = T;
+            score_best = score;
+        }
 
         //cout<<"iteration "<<itr_ctr<<" pose norm "<<(pose_increment_v.norm())<<" score_prev "<<scoreP<<" scoreN "<<score<<endl;
         //cout<<"step size "<<step_size<<endl;
 
-        if(itr_ctr>0)
+        if (itr_ctr > 0)
         {
             convergence = ((pose_increment_v.norm()) < DELTA_SCORE);
         }
-        if(itr_ctr>ITR_MAX)
+        if (itr_ctr > ITR_MAX)
         {
             convergence = true;
             ret = false;
         }
         itr_ctr++;
     }
-//    cout<<"res: "<<current_resolution<<" itr "<<itr_ctr<<endl;
-//    cout<<"T: \n t = "<<T.translation().transpose()<<endl;
-//    cout<<"r= \n"<<T.rotation()<<endl;
+    //    cout<<"res: "<<current_resolution<<" itr "<<itr_ctr<<endl;
+    //    cout<<"T: \n t = "<<T.translation().transpose()<<endl;
+    //    cout<<"r= \n"<<T.rotation()<<endl;
 
     T = Tbest;
-    this->finalscore = score/NUMBER_OF_ACTIVE_CELLS;
+    this->finalscore = score / NUMBER_OF_ACTIVE_CELLS;
     return ret;
 }
 
-
-void NDTMatcherP2D::check( pcl::PointCloud<pcl::PointXYZ>& fixed,
-            pcl::PointCloud<pcl::PointXYZ>& moving,
-            Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T )
+void NDTMatcherP2D::check(pcl::PointCloud<pcl::PointXYZ> &fixed,
+                          pcl::PointCloud<pcl::PointXYZ> &moving,
+                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T)
 {
-  // init
-  
-  // check score
+    // init
 
-  // check hessian
+    // check score
 
-  // output something
+    // check hessian
+
+    // output something
 }
-            
 
-
-bool NDTMatcherP2D::update_score_gradient(Eigen::Matrix<double,6,1> &score_gradient,
-        Eigen::Vector3d &transformed,
-        Eigen::Matrix3d & Cinv)
+bool NDTMatcherP2D::update_score_gradient(Eigen::Matrix<double, 6, 1> &score_gradient,
+                                          Eigen::Vector3d &transformed,
+                                          Eigen::Matrix3d &Cinv)
 {
 
     Eigen::Vector3d CxX, CxdX;
-    double factor = (-lfd2*transformed.dot(Cinv*transformed)/2);
+    double factor = (-lfd2 * transformed.dot(Cinv * transformed) / 2);
 
     //these conditions were copied from martin's code
-    if(factor < -120)
+    if (factor < -120)
     {
         return false;
     }
-    factor = lfd2*exp(factor);
-    if(factor > 1 || factor < 0 || factor*0 !=0)
+    factor = lfd2 * exp(factor);
+    if (factor > 1 || factor < 0 || factor * 0 != 0)
     {
         return false;
     }
-    factor *=lfd1;
+    factor *= lfd1;
 
-    for(int i=0; i<6; i++)
+    for (int i = 0; i < 6; i++)
     {
-        CxdX = Cinv*Jest.col(i);
-        score_gradient(i) += transformed.dot(CxdX)*factor;
+        CxdX = Cinv * Jest.col(i);
+        score_gradient(i) += transformed.dot(CxdX) * factor;
     }
     return true;
-
 }
 
-void NDTMatcherP2D::update_hessian(Eigen::Matrix<double,6,6> &Hessian,
-        Eigen::Vector3d &transformed,
-        Eigen::Matrix3d & Cinv)
+void NDTMatcherP2D::update_hessian(Eigen::Matrix<double, 6, 6> &Hessian,
+                                   Eigen::Vector3d &transformed,
+                                   Eigen::Matrix3d &Cinv)
 {
 
     Eigen::Vector3d CxX, CxdXdI, CxdXdJ, CxSecondOrder;
-    CxX = Cinv*transformed;
-    double factor = lfd1*lfd2*exp(-lfd2*transformed.dot(CxX)/2);
-    for(int i=0; i<Hessian.rows(); i++)
+    CxX = Cinv * transformed;
+    double factor = lfd1 * lfd2 * exp(-lfd2 * transformed.dot(CxX) / 2);
+    for (int i = 0; i < Hessian.rows(); i++)
     {
-        for(int j=0; j<Hessian.cols(); j++)
+        for (int j = 0; j < Hessian.cols(); j++)
         {
 
-            CxdXdI = Cinv*Jest.col(i);
-            CxdXdJ = Cinv*Jest.col(j);
-            CxSecondOrder = Cinv*Hest.block<3,1>(3*i,j);
+            CxdXdI = Cinv * Jest.col(i);
+            CxdXdJ = Cinv * Jest.col(j);
+            CxSecondOrder = Cinv * Hest.block<3, 1>(3 * i, j);
 
-            Hessian(i,j) += factor*(-lfd2*transformed.dot(CxdXdI)*transformed.dot(CxdXdJ) +
-                                    transformed.dot(CxSecondOrder) +
-                                    Jest.col(j).dot(CxdXdI) );
+            Hessian(i, j) += factor * (-lfd2 * transformed.dot(CxdXdI) * transformed.dot(CxdXdJ) +
+                                       transformed.dot(CxSecondOrder) +
+                                       Jest.col(j).dot(CxdXdI));
         }
     }
-
 }
 
 void NDTMatcherP2D::precomputeAngleDerivatives(Eigen::Vector3d &eulerAngles)
 {
-    if(fabsf(eulerAngles(0)) < 10e-5) eulerAngles(0) = 0;
-    if(fabsf(eulerAngles(1)) < 10e-5) eulerAngles(1) = 0;
-    if(fabsf(eulerAngles(2)) < 10e-5) eulerAngles(2) = 0;
-    double cx,cy,cz, sx,sy,sz;
+    if (fabsf(eulerAngles(0)) < 10e-5)
+        eulerAngles(0) = 0;
+    if (fabsf(eulerAngles(1)) < 10e-5)
+        eulerAngles(1) = 0;
+    if (fabsf(eulerAngles(2)) < 10e-5)
+        eulerAngles(2) = 0;
+    double cx, cy, cz, sx, sy, sz;
     cx = cos(eulerAngles(0));
     cy = cos(eulerAngles(1));
     cz = cos(eulerAngles(2));
@@ -515,15 +514,15 @@ void NDTMatcherP2D::precomputeAngleDerivatives(Eigen::Vector3d &eulerAngles)
     sy = sin(eulerAngles(1));
     sz = sin(eulerAngles(2));
 
-    jest13 << (-sx*sz+cx*sy*cz) , (-sx*cz - cx*sy*sz) , (-cx*cy) ;
-    jest23 << (cx*sz+sx*sy*cz) , (cx*cz-sx*sy*sz) , (-sx*cy);
-    jest04 << (-sy*cz) , sy*sz , cy;
-    jest14 << sx*cy*cz , (-sx*cy*sz) , sx*sy;
-    jest24 << (-cx*cy*cz) , cx*cy*sz , (-cx*sy);
-    jest05 << (-cy*sz) , (-cy*cz), 0;
-    jest15 << (cx*cz-sx*sy*sz) , (-cx*sz - sx*sy*cz), 0;
-    jest25 << (sx*cz + cx*sy*sz) ,(cx*sy*cz - sx*sz), 0;
-/*
+    jest13 << (-sx * sz + cx * sy * cz), (-sx * cz - cx * sy * sz), (-cx * cy);
+    jest23 << (cx * sz + sx * sy * cz), (cx * cz - sx * sy * sz), (-sx * cy);
+    jest04 << (-sy * cz), sy * sz, cy;
+    jest14 << sx * cy * cz, (-sx * cy * sz), sx * sy;
+    jest24 << (-cx * cy * cz), cx * cy * sz, (-cx * sy);
+    jest05 << (-cy * sz), (-cy * cz), 0;
+    jest15 << (cx * cz - sx * sy * sz), (-cx * sz - sx * sy * cz), 0;
+    jest25 << (sx * cz + cx * sy * sz), (cx * sy * cz - sx * sz), 0;
+    /*
     std::cerr<<"jest13 "<<jest13.transpose() <<std::endl;
     std::cerr<<"jest23 "<<jest23.transpose() <<std::endl;
     std::cerr<<"jest04 "<<jest04.transpose() <<std::endl;
@@ -533,22 +532,22 @@ void NDTMatcherP2D::precomputeAngleDerivatives(Eigen::Vector3d &eulerAngles)
     std::cerr<<"jest15 "<<jest15.transpose() <<std::endl;
     std::cerr<<"jest25 "<<jest25.transpose() <<std::endl;
 */
-    a2 << (-cx*sz-sx*sy*cz),(-cx*cz+sx*sy*sz),sx*cy;
-    a3 << (-sx*sz+cx*sy*cz),(-cx*sy*sz-sx*cz),(-cx*cy);
-    b2 << (cx*cy*cz),(-cx*cy*sz),(cx*sy);
-    b3 << (sx*cy*cz),(-sx*cy*sz),(sx*sy);
-    c2 << (-sx*cz-cx*sy*sz),(sx*sz-cx*sy*cz),0;
-    c3 << (cx*cz-sx*sy*sz),(-sx*sy*cz-cx*sz),0;
-    d1 << (-cy*cz),(cy*sz),(sy);
-    d2 << (-sx*sy*cz),(sx*sy*sz),(sx*cy);
-    d3 << (cx*sy*cz),(-cx*sy*sz),(-cx*cy);
-    e1 << (sy*sz),(sy*cz),0;
-    e2 << (-sx*cy*sz),(-sx*cy*cz),0;
-    e3 << (cx*cy*sz),(cx*cy*cz),0;
-    f1 << (-cy*cz),(cy*sz),0;
-    f2 << (-cx*sz -sx*sy*cz),(-cx*cz+sx*sy*sz),0;
-    f3 << (-sx*sz+cx*sy*cz),(-cx*sy*sz-sx*cz),0;
-/*
+    a2 << (-cx * sz - sx * sy * cz), (-cx * cz + sx * sy * sz), sx * cy;
+    a3 << (-sx * sz + cx * sy * cz), (-cx * sy * sz - sx * cz), (-cx * cy);
+    b2 << (cx * cy * cz), (-cx * cy * sz), (cx * sy);
+    b3 << (sx * cy * cz), (-sx * cy * sz), (sx * sy);
+    c2 << (-sx * cz - cx * sy * sz), (sx * sz - cx * sy * cz), 0;
+    c3 << (cx * cz - sx * sy * sz), (-sx * sy * cz - cx * sz), 0;
+    d1 << (-cy * cz), (cy * sz), (sy);
+    d2 << (-sx * sy * cz), (sx * sy * sz), (sx * cy);
+    d3 << (cx * sy * cz), (-cx * sy * sz), (-cx * cy);
+    e1 << (sy * sz), (sy * cz), 0;
+    e2 << (-sx * cy * sz), (-sx * cy * cz), 0;
+    e3 << (cx * cy * sz), (cx * cy * cz), 0;
+    f1 << (-cy * cz), (cy * sz), 0;
+    f2 << (-cx * sz - sx * sy * cz), (-cx * cz + sx * sy * sz), 0;
+    f3 << (-sx * sz + cx * sy * cz), (-cx * sy * sz - sx * cz), 0;
+    /*
     std::cerr<<"a2 "<<a2.transpose() <<std::endl;
     std::cerr<<"a3 "<<a3.transpose() <<std::endl;
     std::cerr<<"b2 "<<b2.transpose() <<std::endl;
@@ -569,76 +568,75 @@ void NDTMatcherP2D::precomputeAngleDerivatives(Eigen::Vector3d &eulerAngles)
 void NDTMatcherP2D::computeDerivatives(pcl::PointXYZ &pt)
 {
 
-    if(useSimpleDerivatives)
+    if (useSimpleDerivatives)
     {
-        Jest(1,3) = -pt.z;
-        Jest(2,3) = pt.y;
-        Jest(0,4) = pt.z;
-        Jest(2,4) = -pt.x;
-        Jest(0,5) = -pt.y;
-        Jest(1,5) = pt.x;
+        Jest(1, 3) = -pt.z;
+        Jest(2, 3) = pt.y;
+        Jest(0, 4) = pt.z;
+        Jest(2, 4) = -pt.x;
+        Jest(0, 5) = -pt.y;
+        Jest(1, 5) = pt.x;
 
-	//a	
-	Hest(10,3) = -pt.y;
-	Hest(11,3) = -pt.z;
-	//b
-	Hest(13,3) = pt.x;
-	//c
-	Hest(17,3) = pt.x;
-	//b
-	Hest(10,4) = pt.x;
-	//d
-	Hest(12,4) = -pt.x;
-	Hest(14,4) = -pt.z;
-	//e
-	Hest(17,4) = pt.y;
-	//c
-	Hest(11,5) = pt.x;
-	//e
-	Hest(14,5) = pt.y;
-	//f
-	Hest(15,5) = -pt.x;
-	Hest(16,5) = -pt.y;
+        //a
+        Hest(10, 3) = -pt.y;
+        Hest(11, 3) = -pt.z;
+        //b
+        Hest(13, 3) = pt.x;
+        //c
+        Hest(17, 3) = pt.x;
+        //b
+        Hest(10, 4) = pt.x;
+        //d
+        Hest(12, 4) = -pt.x;
+        Hest(14, 4) = -pt.z;
+        //e
+        Hest(17, 4) = pt.y;
+        //c
+        Hest(11, 5) = pt.x;
+        //e
+        Hest(14, 5) = pt.y;
+        //f
+        Hest(15, 5) = -pt.x;
+        Hest(16, 5) = -pt.y;
         return;
     }
 
     Eigen::Vector3d x;
-    x<<pt.x,pt.y,pt.z;
+    x << pt.x, pt.y, pt.z;
 
     //full derivatives
-    Jest(1,3) = x.dot(jest13);
-    Jest(2,3) = x.dot(jest23);
-    Jest(0,4) = x.dot(jest04);
-    Jest(1,4) = x.dot(jest14);
-    Jest(2,4) = x.dot(jest24);
-    Jest(0,5) = x.dot(jest05);
-    Jest(1,5) = x.dot(jest15);
-    Jest(2,5) = x.dot(jest25);
+    Jest(1, 3) = x.dot(jest13);
+    Jest(2, 3) = x.dot(jest23);
+    Jest(0, 4) = x.dot(jest04);
+    Jest(1, 4) = x.dot(jest14);
+    Jest(2, 4) = x.dot(jest24);
+    Jest(0, 5) = x.dot(jest05);
+    Jest(1, 5) = x.dot(jest15);
+    Jest(2, 5) = x.dot(jest25);
 
-    Eigen::Vector3d a,b,c,d,e,f;
+    Eigen::Vector3d a, b, c, d, e, f;
 
-    a<<0,x.dot(a2),x.dot(a3);
-    b<<0,x.dot(b2),x.dot(b3);
-    c<<0,x.dot(c2),x.dot(c3);
-    d<<x.dot(d1),x.dot(d2),x.dot(d3);
-    e<<x.dot(e1),x.dot(e2),x.dot(e3);
-    f<<x.dot(f1),x.dot(f2),x.dot(f3);
+    a << 0, x.dot(a2), x.dot(a3);
+    b << 0, x.dot(b2), x.dot(b3);
+    c << 0, x.dot(c2), x.dot(c3);
+    d << x.dot(d1), x.dot(d2), x.dot(d3);
+    e << x.dot(e1), x.dot(e2), x.dot(e3);
+    f << x.dot(f1), x.dot(f2), x.dot(f3);
 
     //Hest
-    Hest.block<3,1>(9,3) = a;
-    Hest.block<3,1>(12,3) = b;
-    Hest.block<3,1>(15,3) = c;
-    Hest.block<3,1>(9,4) = b;
-    Hest.block<3,1>(12,4) = d;
-    Hest.block<3,1>(15,4) = e;
-    Hest.block<3,1>(9,5) = c;
-    Hest.block<3,1>(12,5) = e;
-    Hest.block<3,1>(15,5) = f;
-
+    Hest.block<3, 1>(9, 3) = a;
+    Hest.block<3, 1>(12, 3) = b;
+    Hest.block<3, 1>(15, 3) = c;
+    Hest.block<3, 1>(9, 4) = b;
+    Hest.block<3, 1>(12, 4) = d;
+    Hest.block<3, 1>(15, 4) = e;
+    Hest.block<3, 1>(9, 5) = c;
+    Hest.block<3, 1>(12, 5) = e;
+    Hest.block<3, 1>(15, 5) = f;
 }
 
 double NDTMatcherP2D::scorePointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
-        NDTMap &targetNDT)
+                                      NDTMap &targetNDT)
 {
     double score_here = 0;
     double score_native = 0;
@@ -647,12 +645,12 @@ double NDTMatcherP2D::scorePointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
     Eigen::Vector3d mean;
     Eigen::Vector3d point;
     NUMBER_OF_ACTIVE_CELLS = 0;
-    for(unsigned int i=0; i<source.points.size(); i++)
+    for (unsigned int i = 0; i < source.points.size(); i++)
     {
-        point<<source.points[i].x,source.points[i].y,source.points[i].z;
+        point << source.points[i].x, source.points[i].y, source.points[i].z;
 
-        std::vector<NDTCell*> cells = targetNDT.getCellsForPoint(source.points[i],current_resolution);
-        for(unsigned int j=0; j<cells.size(); j++)
+        std::vector<NDTCell *> cells = targetNDT.getCellsForPoint(source.points[i], current_resolution);
+        for (unsigned int j = 0; j < cells.size(); j++)
         {
             cell = cells[j];
 
@@ -660,35 +658,37 @@ double NDTMatcherP2D::scorePointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
             //    if(!targetNDT.getCellForPoint(source.points[i],cell)) {
             //        continue;
             //	}
-            if(cell == NULL)
+            if (cell == NULL)
             {
                 continue;
             }
             icov = cell->getInverseCov();
             mean = cell->getMean();
-            double l = (point-mean).dot(icov*(point-mean));
-            if(l*0 != 0) continue;
+            double l = (point - mean).dot(icov * (point - mean));
+            if (l * 0 != 0)
+                continue;
 
-            if(l > 120) continue;
+            if (l > 120)
+                continue;
 
-            score_here += (lfd1*exp(-lfd2*l/2));
+            score_here += (lfd1 * exp(-lfd2 * l / 2));
             score_native += (targetNDT.getLikelihoodForPoint(source.points[i]));
             NUMBER_OF_ACTIVE_CELLS += 1;
         }
     }
-//    cout<<"here: "<<score_here<<" native: "<<score_native<<endl;
-//    score_here /= NUMBER_OF_POINTS;
+    //    cout<<"here: "<<score_here<<" native: "<<score_native<<endl;
+    //    score_here /= NUMBER_OF_POINTS;
     return score_here;
 }
 
 //compute the score gradient of a point cloud + transformation to an NDT
 void NDTMatcherP2D::derivativesPointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
-        NDTMap &targetNDT,
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> &transform,
-//	Eigen::Vector3d &eulerAngles,
-        Eigen::Matrix<double,6,1> &score_gradient,
-        Eigen::Matrix<double,6,6> &Hessian,
-        bool computeHessian)
+                                          NDTMap &targetNDT,
+                                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &transform,
+                                          //	Eigen::Vector3d &eulerAngles,
+                                          Eigen::Matrix<double, 6, 1> &score_gradient,
+                                          Eigen::Matrix<double, 6, 6> &Hessian,
+                                          bool computeHessian)
 {
 
     NDTCell *cell;
@@ -697,7 +697,7 @@ void NDTMatcherP2D::derivativesPointCloud(pcl::PointCloud<pcl::PointXYZ> &source
     //Eigen::Vector3d eulerAngles = transform.rotation().eulerAngles(0,1,2);
 
     Jest.setZero();
-    Jest.block<3,3>(0,0).setIdentity();
+    Jest.block<3, 3>(0, 0).setIdentity();
     Hest.setZero();
 
     score_gradient.setZero();
@@ -705,9 +705,9 @@ void NDTMatcherP2D::derivativesPointCloud(pcl::PointCloud<pcl::PointXYZ> &source
     //precompute angles for the derivative matrices
     //precomputeAngleDerivatives(eulerAngles);
 
-    for(unsigned int i=0; i<source.points.size(); i++)
+    for (unsigned int i = 0; i < source.points.size(); i++)
     {
-        transformed<<source.points[i].x,source.points[i].y,source.points[i].z;
+        transformed << source.points[i].x, source.points[i].y, source.points[i].z;
         //transformed = transform*transformed;
 
         // vector<NDTCell*> cells = targetNDT.getCellsForPoint(source.points[i],current_resolution);
@@ -715,45 +715,45 @@ void NDTMatcherP2D::derivativesPointCloud(pcl::PointCloud<pcl::PointXYZ> &source
         // 	cell = cells[j];
         //
         {
-            if(!targetNDT.getCellForPoint(source.points[i],cell))   //
+            if (!targetNDT.getCellForPoint(source.points[i], cell)) //
             {
                 continue;
             }
 
-            if(cell == NULL)
+            if (cell == NULL)
             {
                 continue;
             }
-            transformed -=cell->getMean();
+            transformed -= cell->getMean();
             Cinv = cell->getInverseCov();
 
             //compute Jest and Hest
             computeDerivatives(source.points[i]);
 
             //update score gradient
-            if(!update_score_gradient(score_gradient, transformed, Cinv))
+            if (!update_score_gradient(score_gradient, transformed, Cinv))
             {
                 continue;
             }
 
             //update hessian matrix
-            if(computeHessian)
+            if (computeHessian)
             {
                 update_hessian(Hessian, transformed, Cinv);
             }
             cell = NULL;
         }
-    }    
+    }
     score_gradient = -score_gradient * (1.0 / source.points.size());
     Hessian = -Hessian * (1.0 / source.points.size());
 }
 
 //perform line search to find the best descent rate (More&Thuente)
-double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_init,
-        Eigen::Matrix<double,6,1> &increment,
-        pcl::PointCloud<pcl::PointXYZ> &sourceCloud,
-        Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> &globalT,
-        NDTMap &targetNDT)
+double NDTMatcherP2D::lineSearchMT(Eigen::Matrix<double, 6, 1> &score_gradient_init,
+                                   Eigen::Matrix<double, 6, 1> &increment,
+                                   pcl::PointCloud<pcl::PointXYZ> &sourceCloud,
+                                   Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &globalT,
+                                   NDTMap &targetNDT)
 {
 
     // default params
@@ -764,7 +764,7 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
     double gtol = 0.9999; //epsilon 2
     double stpmax = 10.0;
     double stpmin = 0.0001;
-    int maxfev = 10; //max function evaluations
+    int maxfev = 10;    //max function evaluations
     double xtol = 0.01; //window of uncertainty around the optimal step
 
     double direction = 1.0;
@@ -773,34 +773,34 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
     //cloudHere = lslgeneric::transformPointCloud(globalT,cloud);
     double score_init = 0.0;
 
-    Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> ps,ps2;
-    Eigen::Matrix<double,6,1> pincr, score_gradient_here;
-    Eigen::Matrix<double,6,6> pseudoH;
+    Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> ps, ps2;
+    Eigen::Matrix<double, 6, 1> pincr, score_gradient_here;
+    Eigen::Matrix<double, 6, 6> pseudoH;
     Eigen::Vector3d eulerAngles;
     /////
 
-    int info = 0;			// return code
-    int infoc = 1;		// return code for subroutine cstep
+    int info = 0;  // return code
+    int infoc = 1; // return code for subroutine cstep
 
     // Compute the initial gradient in the search direction and check
     // that s is a descent direction.
 
     //we want to maximize s, so we should minimize -s
-    score_init = scorePointCloud(cloudHere,targetNDT);
+    score_init = scorePointCloud(cloudHere, targetNDT);
 
     //gradient directions are opposite for the negated function
     //score_gradient_init = -score_gradient_init;
 
-//  cout<<"score_init "<<score_init<<endl;
-//  cout<<"score_gradient_init "<<score_gradient_init.transpose()<<endl;
-//  cout<<"increment "<<increment.transpose()<<endl;
+    //  cout<<"score_init "<<score_init<<endl;
+    //  cout<<"score_gradient_init "<<score_gradient_init.transpose()<<endl;
+    //  cout<<"increment "<<increment.transpose()<<endl;
 
     dginit = increment.dot(score_gradient_init);
-//  cout<<"dginit "<<dginit<<endl;
+    //  cout<<"dginit "<<dginit<<endl;
 
     if (dginit >= 0.0)
     {
-//    cout << "MoreThuente::cvsrch - wrong direction (dginit = " << dginit << ")" << endl;
+        //    cout << "MoreThuente::cvsrch - wrong direction (dginit = " << dginit << ")" << endl;
         //return recoverystep; //TODO TSV -1; //
 
         increment = -increment;
@@ -809,7 +809,7 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
 
         if (dginit >= 0.0)
         {
-//    cout << "MoreThuente::cvsrch - Non-descent direction (dginit = " << dginit << ")" << endl;
+            //    cout << "MoreThuente::cvsrch - Non-descent direction (dginit = " << dginit << ")" << endl;
             //stp = recoverystep;
             //newgrp.computeX(oldgrp, dir, stp);
             return recoverystep;
@@ -817,17 +817,17 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
     }
     else
     {
-//     cout<<"correct direction (dginit = " << dginit << ")" << endl;
+        //     cout<<"correct direction (dginit = " << dginit << ")" << endl;
     }
 
     // Initialize local variables.
 
-    bool brackt = false;		// has the soln been bracketed?
-    bool stage1 = true;		// are we in stage 1?
-    int nfev = 0;			// number of function evaluations
-    double dgtest = ftol * dginit; // f for curvature condition
+    bool brackt = false;            // has the soln been bracketed?
+    bool stage1 = true;             // are we in stage 1?
+    int nfev = 0;                   // number of function evaluations
+    double dgtest = ftol * dginit;  // f for curvature condition
     double width = stpmax - stpmin; // interval width
-    double width1 = 2 * width;	// ???
+    double width1 = 2 * width;      // ???
 
     //cout<<"dgtest "<<dgtest<<endl;
     // initial function value
@@ -881,8 +881,8 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
         // lowest point obtained so far.
 
         if ((brackt && ((stp <= stmin) || (stp >= stmax))) ||
-                (nfev >= maxfev - 1) || (infoc == 0) ||
-                (brackt && (stmax - stmin <= xtol * stmax)))
+            (nfev >= maxfev - 1) || (infoc == 0) ||
+            (brackt && (stmax - stmin <= xtol * stmax)))
         {
             stp = stx;
         }
@@ -891,25 +891,25 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
         // and compute the directional derivative.
         ///////////////////////////////////////////////////////////////////////////
 
-        pincr = stp*increment;
+        pincr = stp * increment;
 
-        ps = Eigen::Translation<double,3>(pincr(0),pincr(1),pincr(2))*
-             Eigen::AngleAxisd(pincr(3),Eigen::Vector3d::UnitX())*
-             Eigen::AngleAxisd(pincr(4),Eigen::Vector3d::UnitY())*
-             Eigen::AngleAxisd(pincr(5),Eigen::Vector3d::UnitZ());
+        ps = Eigen::Translation<double, 3>(pincr(0), pincr(1), pincr(2)) *
+             Eigen::AngleAxisd(pincr(3), Eigen::Vector3d::UnitX()) *
+             Eigen::AngleAxisd(pincr(4), Eigen::Vector3d::UnitY()) *
+             Eigen::AngleAxisd(pincr(5), Eigen::Vector3d::UnitZ());
 
         //ps2 = ps*globalT;
         //eulerAngles = ps2.rotation().eulerAngles(0,1,2);
 
         //eulerAngles<<pincr(3),pincr(4),pincr(5);
-        cloudHere = lslgeneric::transformPointCloud(ps,sourceCloud);
+        cloudHere = lslgeneric::transformPointCloud(ps, sourceCloud);
 
         double f = 0.0;
-        f = scorePointCloud(cloudHere,targetNDT);
+        f = scorePointCloud(cloudHere, targetNDT);
         score_gradient_here.setZero();
 
         ps2.setIdentity();
-        derivativesPointCloud(cloudHere,targetNDT,ps2,score_gradient_here,pseudoH,false);
+        derivativesPointCloud(cloudHere, targetNDT, ps2, score_gradient_here, pseudoH, false);
 
         //derivativesPointCloud(cloud,ndt,ps,score_gradient_here,pseudoH,false);
 
@@ -926,12 +926,11 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
         double dg = 0.0;
         dg = increment.dot(score_gradient_here);
 
-
         //VALGRIND_CHECK_VALUE_IS_DEFINED(dg);
         //cout<<"dg = "<<dg<<endl;
-        nfev ++;
+        nfev++;
 
-///////////////////////////////////////////////////////////////////////////
+        ///////////////////////////////////////////////////////////////////////////
 
         //cout<<"consider step "<<stp<<endl;
         // Armijo-Goldstein sufficient decrease
@@ -941,33 +940,33 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
         // Test for convergence.
 
         if ((brackt && ((stp <= stmin) || (stp >= stmax))) || (infoc == 0))
-            info = 6;			// Rounding errors
+            info = 6; // Rounding errors
 
         if ((stp == stpmax) && (f <= ftest1) && (dg <= dgtest))
-            info = 5;			// stp=stpmax
+            info = 5; // stp=stpmax
 
         if ((stp == stpmin) && ((f > ftest1) || (dg >= dgtest)))
-            info = 4;			// stp=stpmin
+            info = 4; // stp=stpmin
 
         if (nfev >= maxfev)
-            info = 3;			// max'd out on fevals
+            info = 3; // max'd out on fevals
 
-        if (brackt && (stmax-stmin <= xtol*stmax))
-            info = 2;			// bracketed soln
+        if (brackt && (stmax - stmin <= xtol * stmax))
+            info = 2; // bracketed soln
 
         // RPP sufficient decrease test can be different
         bool sufficientDecreaseTest = false;
-        sufficientDecreaseTest = (f <= ftest1);  // Armijo-Golstein
+        sufficientDecreaseTest = (f <= ftest1); // Armijo-Golstein
 
         //cout<<"ftest2 "<<gtol*(-dginit)<<endl;
         //cout<<"sufficientDecrease? "<<sufficientDecreaseTest<<endl;
         //cout<<"curvature ok? "<<(fabs(dg) <= gtol*(-dginit))<<endl;
-        if ((sufficientDecreaseTest) && (fabs(dg) <= gtol*(-dginit)))
-            info = 1;			// Success!!!!
+        if ((sufficientDecreaseTest) && (fabs(dg) <= gtol * (-dginit)))
+            info = 1; // Success!!!!
 
-        if (info != 0) 		// Line search is done
+        if (info != 0) // Line search is done
         {
-            if (info != 1) 		// Line search failed
+            if (info != 1) // Line search failed
             {
                 // RPP add
                 // counter.incrementNumFailedLineSearches();
@@ -978,9 +977,8 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
                 //newgrp.computeX(oldgrp, dir, stp);
 
                 //message = "(USING RECOVERY STEP!)";
-
             }
-            else 			// Line search succeeded
+            else // Line search succeeded
             {
                 //message = "(STEP ACCEPTED!)";
             }
@@ -1026,16 +1024,15 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
             // and to compute the new step.
 
             //VALGRIND_CHECK_VALUE_IS_DEFINED(dgm);
-            infoc = MoreThuente::cstep(stx,fxm,dgxm,sty,fym,dgym,stp,fm,dgm,
-                                       brackt,stmin,stmax);
+            infoc = MoreThuente::cstep(stx, fxm, dgxm, sty, fym, dgym, stp, fm, dgm,
+                                       brackt, stmin, stmax);
 
             // Reset the function and gradient values for f.
 
-            fx = fxm + stx*dgtest;
-            fy = fym + sty*dgtest;
+            fx = fxm + stx * dgtest;
+            fy = fym + sty * dgtest;
             dgx = dgxm + dgtest;
             dgy = dgym + dgtest;
-
         }
 
         else
@@ -1045,9 +1042,8 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
             // and to compute the new step.
 
             //VALGRIND_CHECK_VALUE_IS_DEFINED(dg);
-            infoc = MoreThuente::cstep(stx,fx,dgx,sty,fy,dgy,stp,f,dg,
-                                       brackt,stmin,stmax);
-
+            infoc = MoreThuente::cstep(stx, fx, dgx, sty, fy, dgy, stp, f, dg,
+                                       brackt, stmin, stmax);
         }
 
         // Force a sufficient decrease in the size of the
@@ -1058,25 +1054,23 @@ double NDTMatcherP2D::lineSearchMT(  Eigen::Matrix<double,6,1> &score_gradient_i
             if (fabs(sty - stx) >= 0.66 * width1)
                 stp = stx + 0.5 * (sty - stx);
             width1 = width;
-            width = fabs(sty-stx);
+            width = fabs(sty - stx);
         }
 
     } // while-loop
-
 }
 
-
-int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
-        double& sty, double& fy, double& dy,
-        double& stp, double& fp, double& dp,
-        bool& brackt, double stmin, double stmax)
+int NDTMatcherP2D::MoreThuente::cstep(double &stx, double &fx, double &dx,
+                                      double &sty, double &fy, double &dy,
+                                      double &stp, double &fp, double &dp,
+                                      bool &brackt, double stmin, double stmax)
 {
     int info = 0;
 
     // Check the input parameters for errors.
 
     if ((brackt && ((stp <= MoreThuente::min(stx, sty)) || (stp >= MoreThuente::max(stx, sty)))) ||
-            (dx * (stp - stx) >= 0.0) || (stmax < stmin))
+        (dx * (stp - stx) >= 0.0) || (stmax < stmin))
         return info;
 
     // Determine if the derivatives have opposite sign.
@@ -1092,7 +1086,7 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
     double theta;
     double s;
     double gamma;
-    double p,q,r;
+    double p, q, r;
     double stpc, stpq, stpf;
 
     if (fp > fx)
@@ -1131,8 +1125,8 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
         info = 2;
         bound = false;
         theta = 3 * (fx - fp) / (stp - stx) + dx + dp;
-        s = MoreThuente::absmax(theta,dx,dp);
-        gamma = s * sqrt(((theta/s) * (theta/s)) - (dx / s) * (dp / s));
+        s = MoreThuente::absmax(theta, dx, dp);
+        gamma = s * sqrt(((theta / s) * (theta / s)) - (dx / s) * (dp / s));
         if (stp > stx)
             gamma = -gamma;
         p = (gamma - dp) + theta;
@@ -1166,7 +1160,7 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
         // The case gamma = 0 only arises if the cubic does not tend
         // to infinity in the direction of the step.
 
-        gamma = s * sqrt(max(0,(theta / s) * (theta / s) - (dx / s) * (dp / s)));
+        gamma = s * sqrt(max(0, (theta / s) * (theta / s) - (dx / s) * (dp / s)));
         if (stp > stx)
             gamma = -gamma;
 
@@ -1180,7 +1174,7 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
         else
             stpc = stmin;
 
-        stpq = stp + (dp/ (dp - dx)) * (stx - stp);
+        stpq = stp + (dp / (dp - dx)) * (stx - stp);
         if (brackt)
         {
             if (fabs(stp - stpc) < fabs(stp - stpq))
@@ -1210,7 +1204,7 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
         {
             theta = 3 * (fp - fy) / (sty - stp) + dy + dp;
             s = MoreThuente::absmax(theta, dy, dp);
-            gamma = s * sqrt(((theta/s)*(theta/s)) - (dy / s) * (dp / s));
+            gamma = s * sqrt(((theta / s) * (theta / s)) - (dy / s) * (dp / s));
             if (stp > sty)
                 gamma = -gamma;
             p = (gamma - dp) + theta;
@@ -1261,7 +1255,6 @@ int NDTMatcherP2D::MoreThuente::cstep(double& stx, double& fx, double& dx,
     }
 
     return info;
-
 }
 
 double NDTMatcherP2D::MoreThuente::min(double a, double b)
@@ -1286,29 +1279,29 @@ double NDTMatcherP2D::MoreThuente::absmax(double a, double b, double c)
         return (b > c) ? b : c;
 }
 
-pcl::PointCloud<pcl::PointXYZ> NDTMatcherP2D::subsample(pcl::PointCloud<pcl::PointXYZ>& original)
+pcl::PointCloud<pcl::PointXYZ> NDTMatcherP2D::subsample(pcl::PointCloud<pcl::PointXYZ> &original)
 {
 
     std::string subsampleType = "GRID";
-    if(subsampleType == "NONE")
+    if (subsampleType == "NONE")
     {
         return original;
     }
-    if(subsampleType == "GRID")
+    if (subsampleType == "GRID")
     {
-        double subsampleRes = subsample_size;//current_resolution/2;
+        double subsampleRes = subsample_size; //current_resolution/2;
         pcl::PointCloud<pcl::PointXYZ> res;
         LazyGrid prototype(subsampleRes);
-        NDTMap ndt( &prototype );
-        ndt.loadPointCloud( original );
-        std::vector<NDTCell*>::iterator it = ndt.getMyIndex()->begin();
+        NDTMap ndt(&prototype);
+        ndt.loadPointCloud(original);
+        std::vector<NDTCell *>::iterator it = ndt.getMyIndex()->begin();
 
-        while(it!=ndt.getMyIndex()->end())
+        while (it != ndt.getMyIndex()->end())
         {
-            NDTCell* ndcell = (*it);
-            if(ndcell!=NULL)
+            NDTCell *ndcell = (*it);
+            if (ndcell != NULL)
             {
-                if(ndcell->points_.size() > 0)
+                if (ndcell->points_.size() > 0)
                 {
                     res.points.push_back(ndcell->points_.front());
                 }
@@ -1316,7 +1309,6 @@ pcl::PointCloud<pcl::PointXYZ> NDTMatcherP2D::subsample(pcl::PointCloud<pcl::Poi
             it++;
         }
         return res;
-
     }
 
 #if 0
@@ -1385,7 +1377,6 @@ double NDTMatcherP2D::normalizeAngle(double a)
 {
     //set the angle between -M_PI and M_PI
     return atan2(sin(a), cos(a));
-
 }
 
-}
+} // namespace lslgeneric

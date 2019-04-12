@@ -48,18 +48,18 @@ namespace lslgeneric
  */
 class NDTMatcherP2D
 {
-public:
+  public:
     NDTMatcherP2D(std::vector<double> _resolutions)
     {
-        this->init(false,_resolutions);
+        this->init(false, _resolutions);
     }
     NDTMatcherP2D()
     {
-        this->init(true,std::vector<double>());
+        this->init(true, std::vector<double>());
     }
-    NDTMatcherP2D(const NDTMatcherP2D& other)
+    NDTMatcherP2D(const NDTMatcherP2D &other)
     {
-        this->init(false,other.resolutions);
+        this->init(false, other.resolutions);
     }
 
     /**
@@ -79,12 +79,11 @@ public:
      *   iterations (before convergence), true if registration
      *   terminated because the convergence criteria were fulfilled.
      */
-    bool match( pcl::PointCloud<pcl::PointXYZ>& target,
-                pcl::PointCloud<pcl::PointXYZ>& source,
-                Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T );
+    bool match(pcl::PointCloud<pcl::PointXYZ> &target,
+               pcl::PointCloud<pcl::PointXYZ> &source,
+               Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T);
 
-
-  /** 
+    /** 
    * Check whether two point clouds are aligned, using the NDT score and Hessian.
    * 
    * \param  fixed
@@ -95,13 +94,12 @@ public:
    *   Optional transformation that can be applied to \c moving. Defaults to zero.
    * \return 
    */
-  void check( pcl::PointCloud<pcl::PointXYZ>& fixed,
-              pcl::PointCloud<pcl::PointXYZ>& moving,
-              Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T
-              //= Eigen::Translation3f( 0.0, 0.0, 0.0 ) * Eigen::AngleAxisf( 0.0, Eigen::Vector3d( 1.0, 0.0, 0.0 ) )
-              );
-  
-  
+    void check(pcl::PointCloud<pcl::PointXYZ> &fixed,
+               pcl::PointCloud<pcl::PointXYZ> &moving,
+               Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T
+               //= Eigen::Translation3f( 0.0, 0.0, 0.0 ) * Eigen::AngleAxisf( 0.0, Eigen::Vector3d( 1.0, 0.0, 0.0 ) )
+    );
+
     /**
      * Registers a point cloud to an NDT structure.
      * \param  fixed
@@ -117,23 +115,19 @@ public:
      *   iterations (before convergence), true if registration
      *   terminated because the convergence criteria were fulfilled.
      */
-    bool match( NDTMap& target,
-                pcl::PointCloud<pcl::PointXYZ>& source,
-                Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T );
+    bool match(NDTMap &target,
+               pcl::PointCloud<pcl::PointXYZ> &source,
+               Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T);
 
-
-
-  
     /**
       * computes the covariance of the match between moving and fixed, at T.
       * note --- computes NDT distributions based on the resolution in res
       * result is returned in cov
       */
-    bool covariance( pcl::PointCloud<pcl::PointXYZ>& target,
-                     pcl::PointCloud<pcl::PointXYZ>& source,
-                     Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor>& T,
-                     Eigen::Matrix<double,6,6> &cov
-                   );
+    bool covariance(pcl::PointCloud<pcl::PointXYZ> &target,
+                    pcl::PointCloud<pcl::PointXYZ> &source,
+                    Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,
+                    Eigen::Matrix<double, 6, 6> &cov);
 
     //compute the score of a point cloud to an NDT
     double scorePointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
@@ -144,21 +138,21 @@ public:
     //output: score_gradient, Hessian
     void derivativesPointCloud(pcl::PointCloud<pcl::PointXYZ> &source,
                                NDTMap &target,
-                               Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> &transform,
-                               Eigen::Matrix<double,6,1> &score_gradient,
-                               Eigen::Matrix<double,6,6> &Hessian,
+                               Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &transform,
+                               Eigen::Matrix<double, 6, 1> &score_gradient,
+                               Eigen::Matrix<double, 6, 6> &Hessian,
                                bool computeHessian);
 
-    void generateScoreDebug(const char* out, pcl::PointCloud<pcl::PointXYZ>& target,
-                            pcl::PointCloud<pcl::PointXYZ>& source);
+    void generateScoreDebug(const char *out, pcl::PointCloud<pcl::PointXYZ> &target,
+                            pcl::PointCloud<pcl::PointXYZ> &source);
 
     double finalscore;
-private:
 
-    Eigen::Matrix<double,3,6> Jest;
-    Eigen::Matrix<double,18,6> Hest;
+  private:
+    Eigen::Matrix<double, 3, 6> Jest;
+    Eigen::Matrix<double, 18, 6> Hest;
     //lf = likelihood function d1 and d2 from the paper
-    double lfd1,lfd2;
+    double lfd1, lfd2;
     bool useSimpleDerivatives;
     double current_resolution;
     bool isIrregularGrid;
@@ -167,11 +161,11 @@ private:
     void precomputeAngleDerivatives(Eigen::Vector3d &eulerAngles);
 
     //iteratively update the score gradient
-    bool update_score_gradient(Eigen::Matrix<double,6,1> &score_gradient,
+    bool update_score_gradient(Eigen::Matrix<double, 6, 1> &score_gradient,
                                Eigen::Vector3d &transformed,
                                Eigen::Matrix3d &Cinv);
     //iteratively update the hessian matrix
-    void update_hessian(Eigen::Matrix<double,6,6> &Hessian,
+    void update_hessian(Eigen::Matrix<double, 6, 6> &Hessian,
                         Eigen::Vector3d &transformed,
                         Eigen::Matrix3d &Cinv);
 
@@ -180,18 +174,18 @@ private:
 
     //perform line search to find the best descent rate (naive case)
     double lineSearch(double score_here,
-                      Eigen::Matrix<double,6,1> &score_gradient,
-                      Eigen::Matrix<double,6,1> &increment,
+                      Eigen::Matrix<double, 6, 1> &score_gradient,
+                      Eigen::Matrix<double, 6, 1> &increment,
                       pcl::PointCloud<pcl::PointXYZ> &source,
-                      NDTMap &target) ;
+                      NDTMap &target);
 
     //perform line search to find the best descent rate (Mohre&Thuente)
     //adapted from NOX
-    double lineSearchMT( Eigen::Matrix<double,6,1> &score_gradient_init,
-                         Eigen::Matrix<double,6,1> &increment,
-                         pcl::PointCloud<pcl::PointXYZ> &source,
-                         Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> &globalT,
-                         NDTMap &target) ;
+    double lineSearchMT(Eigen::Matrix<double, 6, 1> &score_gradient_init,
+                        Eigen::Matrix<double, 6, 1> &increment,
+                        pcl::PointCloud<pcl::PointXYZ> &source,
+                        Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &globalT,
+                        NDTMap &target);
 
     //compute finited difference derivative, for debug
     /*
@@ -206,32 +200,33 @@ private:
         static double min(double a, double b);
         static double max(double a, double b);
         static double absmax(double a, double b, double c);
-        static int cstep(double& stx, double& fx, double& dx,
-                         double& sty, double& fy, double& dy,
-                         double& stp, double& fp, double& dp,
-                         bool& brackt, double stmin, double stmax);
+        static int cstep(double &stx, double &fx, double &dx,
+                         double &sty, double &fy, double &dy,
+                         double &stp, double &fp, double &dp,
+                         bool &brackt, double stmin, double stmax);
     }; //end MoreThuente
 
     //perform a subsampling depending on user choice
-    pcl::PointCloud<pcl::PointXYZ> subsample(pcl::PointCloud<pcl::PointXYZ>& original);
+    pcl::PointCloud<pcl::PointXYZ> subsample(pcl::PointCloud<pcl::PointXYZ> &original);
     int NUMBER_OF_POINTS;
     int NUMBER_OF_ACTIVE_CELLS;
 
-private:
+  private:
     //storage for pre-computed angular derivatives
     Eigen::Vector3d jest13, jest23, jest04, jest14, jest24, jest05, jest15, jest25;
-    Eigen::Vector3d a2,a3, b2,b3, c2,c3, d1,d2,d3, e1,e2,e3, f1,f2,f3;
+    Eigen::Vector3d a2, a3, b2, b3, c2, c3, d1, d2, d3, e1, e2, e3, f1, f2, f3;
 
     std::vector<double> resolutions;
     //initializes stuff;
     void init(bool useDefaultGridResolutions, std::vector<double> _resolutions);
     double normalizeAngle(double a);
-public:
+
+  public:
     int ITR_MAX;
     double subsample_size;
     EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 };
 
-} // end namespace
+} // namespace lslgeneric
 
 #endif
