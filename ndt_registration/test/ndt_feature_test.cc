@@ -53,12 +53,12 @@ int main(int argc, char **argv)
     boost::mt19937 rng;
     boost::uniform_real<> ud(min, max);
     boost::normal_distribution<> nd(0.0, std_dev);
-    boost::variate_generator<boost::mt19937 &, boost::normal_distribution<>> var_nor(rng, nd);
-    boost::variate_generator<boost::mt19937 &, boost::uniform_real<>> var_uni(rng, ud);
-    std::vector<std::pair<int, int>> corresp;
+    boost::variate_generator<boost::mt19937 &, boost::normal_distribution<> > var_nor(rng, nd);
+    boost::variate_generator<boost::mt19937 &, boost::uniform_real<> > var_uni(rng, ud);
+    std::vector<std::pair<int, int> > corresp;
 
     size_t index = 0;
-    std::vector<std::vector<size_t>> all_indices;
+    std::vector<std::vector<size_t> > all_indices;
     for (int i = 0; i < nb_clusters; i++)
     {
         std::vector<size_t> indices;
@@ -74,7 +74,7 @@ int main(int argc, char **argv)
         all_indices.push_back(indices);
         corresp.push_back(std::pair<int, int>(i, nb_clusters - 1 - i)); // nb_clusters-1-i -> To check the da functions is working.
     }
-    std::vector<std::vector<size_t>> all_indices_moving(all_indices.size()); // Reverse the correspondances (To check the da functions)
+    std::vector<std::vector<size_t> > all_indices_moving(all_indices.size()); // Reverse the correspondances (To check the da functions)
     std::reverse_copy(all_indices.begin(), all_indices.end(), all_indices_moving.begin());
 
     for (int i = 0; i < 1 /*nb_clusters*/; i++)

@@ -66,7 +66,7 @@ int main(int argc, char **argv)
 
   Eigen::Matrix<double, 6, 6> covP2D;
   Eigen::MatrixXd covD2D(6, 6);
-  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> Sol;
+  Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6> > Sol;
   //Eigen::SelfAdjointEigenSolver<Eigen::Matrix6d > Sol ();
   Eigen::Matrix<double, 6, 1> evals;
 

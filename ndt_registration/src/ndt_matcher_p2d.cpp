@@ -230,7 +230,7 @@ bool NDTMatcherP2D::covariance(pcl::PointCloud<pcl::PointXYZ> &target,
     // "cov", at this point, is the Hessian multiplied by -1
 
     // Make sure that the Hessian is invertible
-    Eigen::FullPivLU<Eigen::Matrix<double, 6, 6>> dec(cov);
+    Eigen::FullPivLU<Eigen::Matrix<double, 6, 6> > dec(cov);
     Eigen::Matrix<double, 6, 6> invH;
     if (dec.isInvertible())
     {
@@ -312,7 +312,7 @@ bool NDTMatcherP2D::match(NDTMap &targetNDT,
         derivativesPointCloud(prevCloud, targetNDT, TR, score_gradient, Hessian, true);
         scg = score_gradient;
 
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> Sol(Hessian);
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6> > Sol(Hessian);
         Eigen::Matrix<double, 6, 1> evals = Sol.eigenvalues().real();
         double minCoeff = evals.minCoeff();
         double maxCoeff = evals.maxCoeff();

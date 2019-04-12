@@ -28,7 +28,7 @@ NDTMatcherFeatureD2D::scoreNDT(std::vector<NDTCell *> &sourceNDT, NDTMap &target
     Eigen::Vector3d meanFixed;
     Eigen::Vector3d meanMoving;
     Eigen::Matrix3d R = T.rotation();
-    std::vector<std::pair<unsigned int, double>> scores;
+    std::vector<std::pair<unsigned int, double> > scores;
     for (unsigned int j = 0; j < _corr.size(); j++)
     {
         unsigned int i = _corr[j].second;

@@ -200,7 +200,7 @@ bool NDTMatcherD2D_2D::match(NDTMap &targetNDT,
         //std::cout<<"Hh(:,:,"<<itr_ctr+1<<")  =  ["<< H<<"];\n"<<std::endl;				  //
         //std::cout<<"gradh (:,"<<itr_ctr+1<<")= ["<<scg.transpose()<<"];"<<std::endl;         //
 
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 3, 3>> Sol(H);
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 3, 3> > Sol(H);
         Eigen::Matrix<double, 3, 1> evals = Sol.eigenvalues().real();
         double minCoeff = evals.minCoeff();
         double maxCoeff = evals.maxCoeff();

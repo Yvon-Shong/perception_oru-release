@@ -195,7 +195,7 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
         }
 
         //	Hessian = Hessian + score_gradient.norm()*Eigen::Matrix<double,6,6>::Identity();
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6>> Sol(Hessian);
+        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double, 6, 6> > Sol(Hessian);
         Eigen::Matrix<double, 6, 1> evals = Sol.eigenvalues().real();
         double minCoeff = evals.minCoeff();
         double maxCoeff = evals.maxCoeff();

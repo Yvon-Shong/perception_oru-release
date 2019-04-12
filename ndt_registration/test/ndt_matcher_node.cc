@@ -33,7 +33,7 @@ class NDTMatcherNode
     ros::Publisher output_pub_;
 
     // Use the vector as a cyclic buffer (increment with std::rotate).
-    std::vector<pcl::PointCloud<pcl::PointXYZ>, Eigen::aligned_allocator<pcl::PointCloud<pcl::PointXYZ>>> pcl_buffer_;
+    std::vector<pcl::PointCloud<pcl::PointXYZ>, Eigen::aligned_allocator<pcl::PointCloud<pcl::PointXYZ> > > pcl_buffer_;
     unsigned int nb_added_clouds_;
     boost::mutex m;
     lslgeneric::NDTMatcherF2F *matcher;

@@ -44,7 +44,7 @@ namespace lslgeneric
 class NDTMatcherFeatureD2D : public lslgeneric::NDTMatcherD2D
 {
   public:
-    NDTMatcherFeatureD2D(const std::vector<std::pair<int, int>> &corr, double trimFactor = 1.) : _corr(corr), _trimFactor(trimFactor)
+    NDTMatcherFeatureD2D(const std::vector<std::pair<int, int> > &corr, double trimFactor = 1.) : _corr(corr), _trimFactor(trimFactor)
     {
         _goodCorr.resize(corr.size());
         std::fill(_goodCorr.begin(), _goodCorr.end(), true);
@@ -106,7 +106,7 @@ class NDTMatcherFeatureD2D : public lslgeneric::NDTMatcherD2D
     using NDTMatcherD2D::ZHest;
 
   protected:
-    const std::vector<std::pair<int, int>> &_corr;
+    const std::vector<std::pair<int, int> > &_corr;
     double _trimFactor;
     std::vector<bool> _goodCorr;
 };
