@@ -36,8 +36,11 @@
 #define DEPTH_CAMERA
 
 #include <cv.h>
-// #include <opencv2/core.hpp>
-// #include <opencv2/calib3d/calib3d.hpp>
+// #include <opencv/cv.h>
+// #include "opencv2/opencv.hpp"
+#include <opencv2/core.hpp>
+#include<opencv2/opencv.hpp>
+#include <opencv2/calib3d.hpp>
 #include <pcl/point_cloud.h>
 #include <iostream>
 

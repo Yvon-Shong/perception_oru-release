@@ -10,8 +10,6 @@
 namespace lslgeneric
 {
 
-//#define DO_DEBUG_PROC
-
 void NDTMatcherD2D::init(bool _isIrregularGrid,
                          bool useDefaultGridResolutions, std::vector<double> _resolutions)
 {
@@ -48,7 +46,7 @@ void NDTMatcherD2D::init(bool _isIrregularGrid,
 
 bool NDTMatcherD2D::match(pcl::PointCloud<pcl::PointXYZ> &target,
                           pcl::PointCloud<pcl::PointXYZ> &source,
-                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,
+                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,// match initial value
                           bool useInitialGuess)
 {
 
@@ -60,95 +58,84 @@ bool NDTMatcherD2D::match(pcl::PointCloud<pcl::PointXYZ> &target,
 
     //initial guess
     pcl::PointCloud<pcl::PointXYZ> sourceCloud = source;
+    // Temp, the transformation we will compute
+    // Tinit,  
     Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> Temp, Tinit;
     Tinit.setIdentity();
+    // if we need init
     if (useInitialGuess)
     {
+        // transform the source cloud by initial value
+        // next we will compute the delta transform between initial value and ground truth
         lslgeneric::transformPointCloudInPlace(T, sourceCloud);
+        // set T init as initial value
         Tinit = T;
     }
 
     T.setIdentity();
     bool ret = false;
 
-#if 0
-    if(isIrregularGrid)
+    //iterative regular grid
+    for (int r_ctr = resolutions.size() - 1; r_ctr >= 0; r_ctr--)
     {
 
-        OctTree<PointTarget> pr1;
-        NDTMap<PointTarget> targetNDT( &pr1 );
-        targetNDT.loadPointCloud( target );
+        current_resolution = resolutions[r_ctr];
+
+        LazyGrid prototypeSource(current_resolution);
+        LazyGrid prototypeTarget(current_resolution);
+
+        gettimeofday(&tv_start, NULL);
+        NDTMap targetNDT(&prototypeTarget);
+        targetNDT.loadPointCloud(target);
         targetNDT.computeNDTCells();
 
-        OctTree<PointSource> pr2;
-        NDTMap<PointSource> sourceNDT( &pr2 );
-        sourceNDT.loadPointCloud( source );
+        NDTMap sourceNDT(&prototypeSource);
+        sourceNDT.loadPointCloud(sourceCloud);
         sourceNDT.computeNDTCells();
+        gettimeofday(&tv_end, NULL);
 
-        ret = this->match( targetNDT, sourceNDT, T );
+        time_load += (tv_end.tv_sec - tv_start.tv_sec) * 1000. + (tv_end.tv_usec - tv_start.tv_usec) / 1000.;
+        // Temp  = Identity Matrix
+        Temp.setIdentity();
 
+        gettimeofday(&tv_start, NULL);
+
+        // compute the Temp tranfromation
+        ret = this->match(targetNDT, sourceNDT, Temp);
+        // transform the source cloud by the transform under this scale
+        lslgeneric::transformPointCloudInPlace(Temp, sourceCloud);
+        gettimeofday(&tv_end, NULL);
+
+        time_match += (tv_end.tv_sec - tv_start.tv_sec) * 1000. + (tv_end.tv_usec - tv_start.tv_usec) / 1000.;
+
+        //transform moving
+        // if useInitialGuess T = initial value
+        // if not useInitialGuess T = identity matrix
+        // because we have tranformed the pointcloud, we calculate the delta transformation Temp
+        T = Temp * T; //ORIGINAL
+                      //T = T*Temp;
+
+        std::cout << "RESOLUTION: " << current_resolution << std::endl;
+        std::cout << "rotation   : " << Temp.rotation().eulerAngles(0, 1, 2).transpose() << std::endl;
+        std::cout << "translation: " << Temp.translation().transpose() << std::endl;
+        std::cout << "--------------------------------------------------------\nOverall Transform:\n";
+        std::cout << "rotation   : " << T.rotation().eulerAngles(0, 1, 2).transpose() << std::endl;
+        std::cout << "translation: " << T.translation().transpose() << std::endl;
     }
-    else
-#endif
-    {
-
-        //iterative regular grid
-        for (int r_ctr = resolutions.size() - 1; r_ctr >= 0; r_ctr--)
-        {
-
-            current_resolution = resolutions[r_ctr];
-
-            LazyGrid prototypeSource(current_resolution);
-            LazyGrid prototypeTarget(current_resolution);
-
-            gettimeofday(&tv_start, NULL);
-            NDTMap targetNDT(&prototypeTarget);
-            targetNDT.loadPointCloud(target);
-            targetNDT.computeNDTCells();
-
-            NDTMap sourceNDT(&prototypeSource);
-            sourceNDT.loadPointCloud(sourceCloud);
-            sourceNDT.computeNDTCells();
-            gettimeofday(&tv_end, NULL);
-
-            time_load += (tv_end.tv_sec - tv_start.tv_sec) * 1000. + (tv_end.tv_usec - tv_start.tv_usec) / 1000.;
-            Temp.setIdentity();
-
-            gettimeofday(&tv_start, NULL);
-            ret = this->match(targetNDT, sourceNDT, Temp);
-            lslgeneric::transformPointCloudInPlace(Temp, sourceCloud);
-            gettimeofday(&tv_end, NULL);
-
-            time_match += (tv_end.tv_sec - tv_start.tv_sec) * 1000. + (tv_end.tv_usec - tv_start.tv_usec) / 1000.;
-
-            //transform moving
-            T = Temp * T; //ORIGINAL
-                          //T = T*Temp;
-
-#ifdef DO_DEBUG_PROC
-            std::cout << "RESOLUTION: " << current_resolution << std::endl;
-            std::cout << "rotation   : " << Temp.rotation().eulerAngles(0, 1, 2).transpose() << std::endl;
-            std::cout << "translation: " << Temp.translation().transpose() << std::endl;
-            std::cout << "--------------------------------------------------------\nOverall Transform:\n";
-            std::cout << "rotation   : " << T.rotation().eulerAngles(0, 1, 2).transpose() << std::endl;
-            std::cout << "translation: " << T.translation().transpose() << std::endl;
-
-#endif
-        }
-    }
+    // after finishing multiscale d2d ndt
     if (useInitialGuess)
     {
+        // T by Tinit 
         T = T * Tinit;
     }
     gettimeofday(&tv_end0, NULL);
     time_combined = (tv_end0.tv_sec - tv_start0.tv_sec) * 1000. + (tv_end0.tv_usec - tv_start0.tv_usec) / 1000.;
-    //std::cout<<"load: "<<time_load<<" match "<<time_match<<" combined "<<time_combined<<std::endl;
     return ret;
 }
 
 bool NDTMatcherD2D::match(NDTMap &targetNDT,
                           NDTMap &sourceNDT,
-                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,
+                          Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T, // init guess
                           bool useInitialGuess)
 {
 
@@ -156,33 +143,35 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
     bool convergence = false;
     //double score=0;
     double score_best = INT_MAX;
-    //double DELTA_SCORE = 0.0005;
-    //double NORM_MAX = current_resolution, ROT_MAX = M_PI/10; //
     int itr_ctr = 0;
-    //double alpha = 0.95;
     double step_size = 1;
     Eigen::Matrix<double, 6, 1> pose_increment_v, scg;
     Eigen::MatrixXd Hessian(6, 6), score_gradient(6, 1); //column vectors, pose_increment_v(6,1)
-
+    
+    // TR current tranformation in current iteration
+    // Tbest  the best transformation with best score
     Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> TR, Tbest;
     Eigen::Vector3d transformed_vec, mean;
     bool ret = true;
     if (!useInitialGuess)
     {
+        // if we dont use init guess,
+        // we set it as identity matrix
         T.setIdentity();
     }
-    Tbest = T;
 
-    Eigen::Array<double, 6, 1> weights;
+    Tbest = T;
+    // use T to transfrom sourceNDT map to nextNDT to compute loss
     std::vector<NDTCell *> nextNDT = sourceNDT.pseudoTransformNDT(T);
 
-    //std::cout<<"pose(:,"<<1<<") = ["<<T.translation().transpose()<<" "<<T.rotation().eulerAngles(0,1,2).transpose()<<"]';\n";
     while (!convergence)
     {
+        // set current TR as identity
         TR.setIdentity();
         Hessian.setZero();
         score_gradient.setZero();
 
+        // compute the 
         double score_here = derivativesNDT(nextNDT, targetNDT, score_gradient, Hessian, true);
         //derivativesNDT(nextNDT,targetNDT,score_gradient,Hessian,true);
         scg = score_gradient;
@@ -199,6 +188,7 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
         Eigen::Matrix<double, 6, 1> evals = Sol.eigenvalues().real();
         double minCoeff = evals.minCoeff();
         double maxCoeff = evals.maxCoeff();
+        // converge condition
         if (minCoeff < 0) //|| evals.minCoeff()) // < 10e-5*evals.maxCoeff())
         {
             if (regularize)
@@ -231,9 +221,6 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
             }
             //            std::cerr<<"regularizing\n";
         }
-        //	std::cout<<"s("<<itr_ctr+1<<") = "<<score_here<<";\n";
-        //	std::cout<<"H(:,:,"<<itr_ctr+1<<")  =  ["<< Hessian<<"];\n"<<std::endl;				  //
-        //	std::cout<<"grad (:,"<<itr_ctr+1<<")= ["<<score_gradient.transpose()<<"];"<<std::endl;         //
         if (score_gradient.norm() <= DELTA_SCORE)
         {
             //	    std::cout<<"incr(:,"<<itr_ctr+1<<") = [0 0 0 0 0 0]';\n";
@@ -252,63 +239,16 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
             //	    std::cout<<"itr "<<itr_ctr<<" dScore "<< 0 <<std::endl;
             return true;
         }
-        //	pose_increment_v.block<3,1>(0,0) = -Hessian.block<3,3>(0,0).ldlt().solve(score_gradient.block<3,1>(0,0));
-        //	pose_increment_v.block<3,1>(3,0) = -Hessian.block<3,3>(3,3).ldlt().solve(score_gradient.block<3,1>(3,0));
-        /*
-        	Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,6,6> > Sol (Hessian);
-        	Eigen::Matrix<double,6,1> evals = Sol.eigenvalues().real();
-        	if(evals.minCoeff() < 0 ) {
-        	    std::cout<<"\%negative hessian\n";
-        	    std::cout<<"incr(:,"<<itr_ctr+1<<") = [0 0 0 0 0 0]';\n";
-        	    //de-alloc nextNDT
-        	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-        		if(nextNDT[i]!=NULL)
-        		    delete nextNDT[i];
-        	    }
-        	    return true;
-        	} else {
-        	}
-        */
 
         pose_increment_v = -Hessian.ldlt().solve(score_gradient);
-        //pose_increment_v =-0.0001*scg; //
-        /*	if(itr_ctr%2) {
-        	    pose_increment_v(0) = 0;
-        	    pose_increment_v(1) = 0;
-        	    pose_increment_v(2) = 0;
-        	} else {
-        	pose_increment_v(3) = 0;
-        	pose_increment_v(4) = 0;
-        	pose_increment_v(5) = 0;
-        	}
-        	*/
-        /*
-        weights = scg.array().abs();
-        weights.block(0,0,3,1) /= weights.block(0,0,3,1).maxCoeff();
-        weights.block(3,0,3,1) /= weights.block(3,0,3,1).maxCoeff();
-        std::cout<<"w = ["<<weights<<"];\n";
-        std::cout<<"pose_increment_v= ["<<pose_increment_v.transpose()<<"];"<<std::endl;       //
-        pose_increment_v = weights*pose_increment_v.array();
-        //if(pose_increment_v.norm() > 1)
-        //    pose_increment_v.normalize();
-        //scg.normalize();
-        //pose_increment_v = -0.00001*scg;
-         */
-        /*
-        pose_increment_v /= pv;
-        */
-
-        //pose_increment_v = Hessian.jacobiSvd(Eigen::ComputeFullU|Eigen::ComputeFullV).solve(-score_gradient);
+        // scg - score gradient
         double dginit = pose_increment_v.dot(scg);
         if (dginit > 0)
         {
-            //	    std::cout<<"incr(:,"<<itr_ctr+1<<") = ["<<pose_increment_v.transpose()<<"]';\n";
-            //	    std::cout<<"\%dg  =  "<<dginit<<std::endl;     //
-            //            std::cout<<"\%can't decrease in this direction any more, done \n";
+
             //de-alloc nextNDT
             if (score_here > score_best)
             {
-                //		std::cout<<"crap iterations, best was "<<score_best<<" last was "<<score_here<<std::endl;
                 T = Tbest;
             }
             for (unsigned int i = 0; i < nextNDT.size(); i++)
@@ -316,47 +256,12 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
                 if (nextNDT[i] != NULL)
                     delete nextNDT[i];
             }
-            //	    std::cout<<"itr "<<itr_ctr<<" dScore "<< 0 <<std::endl;
             return true;
         }
-        //	std::cout<<"score("<<itr_ctr+1<<") = "<<score_here<<";\n";
-        /*
-           	*/
 
-        //	if(dginit > 0) {
-        //	    std::cout<<"pose_increment_v= ["<<pose_increment_v.transpose()<<"]"<<std::endl;       //
-        //	    std::cout<<"dg  =  "<<dginit<<std::endl;     //
-        //	}
-        /*
-        */
-        /*
-        	std::cout<<"pose_increment_v= ["<<pose_increment_v.transpose()<<"]"<<std::endl;       //
-        	pose_increment_v = Hessian.jacobiSvd(Eigen::ComputeFullU|Eigen::ComputeFullV).solve(-score_gradient);
-        	std::cout<<"dg    "<<pose_increment_v.dot(score_gradient)<<std::endl;     //
-        	//make the initial increment reasonable...
-        	//cout<<"incr_init = ["<<pose_increment_v.transpose()<<"]"<<endl;
-        	double pnorm = sqrt(pose_increment_v(0)*pose_increment_v(0) + pose_increment_v(1)*pose_increment_v(1)
-        			    +pose_increment_v(2)*pose_increment_v(2));
-        	if(pnorm > NORM_MAX) {
-        	    pose_increment_v(0) = NORM_MAX*pose_increment_v(0)/pnorm;
-        	    pose_increment_v(1) = NORM_MAX*pose_increment_v(1)/pnorm;
-        	    pose_increment_v(2) = NORM_MAX*pose_increment_v(2)/pnorm;
-        	}
-        	pose_increment_v(3) = normalizeAngle(pose_increment_v(3));
-        	pose_increment_v(3) = (pose_increment_v(3) > ROT_MAX) ? ROT_MAX : pose_increment_v(3);
-        	pose_increment_v(3) = (pose_increment_v(3) < -ROT_MAX) ? -ROT_MAX : pose_increment_v(3);
-        	pose_increment_v(4) = normalizeAngle(pose_increment_v(4));
-        	pose_increment_v(4) = (pose_increment_v(4) > ROT_MAX) ? ROT_MAX : pose_increment_v(4);
-        	pose_increment_v(4) = (pose_increment_v(4) < -ROT_MAX) ? -ROT_MAX : pose_increment_v(4);
-        	pose_increment_v(5) = normalizeAngle(pose_increment_v(5));
-        	pose_increment_v(5) = (pose_increment_v(5) > ROT_MAX) ? ROT_MAX : pose_increment_v(5);
-        	pose_increment_v(5) = (pose_increment_v(5) < -ROT_MAX) ? -ROT_MAX : pose_increment_v(5);
-        //	cout<<"H  =  ["<<Hessian<<"]"<<endl;
-        //	cout<<"grad= ["<<score_gradient.transpose()<<"]"<<endl;
-        //	cout<<"dg    "<<pose_increment_v.dot(score_gradient)<<endl;
+        // disconverge
 
-        */
-        //check direction here:
+        // check direction here:
 
         if (step_control)
         {
@@ -367,26 +272,19 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
             step_size = 1;
         }
         pose_increment_v = step_size * pose_increment_v;
-        //std::cout<<"\%iteration "<<itr_ctr<<" pose norm "<<(pose_increment_v.norm())<<" score "<<score_here<<" step "<<step_size<<std::endl;
-        /*
-        pose_increment_v(2) = 0;
-        pose_increment_v(3) = 0;
-        pose_increment_v(4) = 0;
-        pose_increment_v(5) = 0;
-        */
 
         TR.setIdentity();
+        // increment matrix TR
         TR = Eigen::Translation<double, 3>(pose_increment_v(0), pose_increment_v(1), pose_increment_v(2)) *
              Eigen::AngleAxis<double>(pose_increment_v(3), Eigen::Vector3d::UnitX()) *
              Eigen::AngleAxis<double>(pose_increment_v(4), Eigen::Vector3d::UnitY()) *
              Eigen::AngleAxis<double>(pose_increment_v(5), Eigen::Vector3d::UnitZ());
 
-        //std::cout<<"incr= ["<<pose_increment_v.transpose()<<"]"<<std::endl;
         //transform source NDT
+        //update T
         T = TR * T;
-        //	std::cout<<"incr(:,"<<itr_ctr+1<<") = ["<<pose_increment_v.transpose()<<"]';\n";
-        //	std::cout<<"pose(:,"<<itr_ctr+2<<") = ["<<T.translation().transpose()<<" "<<T.rotation().eulerAngles(0,1,2).transpose()<<"]';\n";
-
+        // update nextNDT
+        // use T to transfrom sourceNDT map to nextNDT to compute loss
         for (unsigned int i = 0; i < nextNDT.size(); i++)
         {
             //TRANSFORM
@@ -401,7 +299,6 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
         if (itr_ctr > 0)
         {
             convergence = ((pose_increment_v.norm()) < DELTA_SCORE);
-            //convergence = ((score_gradient.norm()) < DELTA_SCORE);
         }
         if (itr_ctr > ITR_MAX)
         {
@@ -409,17 +306,12 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
             ret = false;
         }
         itr_ctr++;
-        //step_size *= alpha;
-        //std::cout<<"step size "<<step_size<<std::endl;
     }
 
-    //    std::cout<<"itr "<<itr_ctr<<" dScore "<< pose_increment_v.norm()<<std::endl;
-    //std::vector<NDTCell<PointSource>*> nextNDT = sourceNDT.pseudoTransformNDT(T);
     score_gradient.setZero();
     double score_here = derivativesNDT(nextNDT, targetNDT, score_gradient, Hessian, false);
     if (score_here > score_best)
     {
-        //	std::cout<<"crap iterations, best was "<<score_best<<" last was "<<score_here<<std::endl;
         T = Tbest;
     }
     for (unsigned int i = 0; i < nextNDT.size(); i++)
@@ -427,12 +319,6 @@ bool NDTMatcherD2D::match(NDTMap &targetNDT,
         if (nextNDT[i] != NULL)
             delete nextNDT[i];
     }
-
-    //    std::cout<<"incr(:,"<<itr_ctr+1<<") = [0 0 0 0 0 0]';\n";
-    //    std::cout<<"grad(:,"<<itr_ctr+1<<") = [0 0 0 0 0 0]';\n";
-    //std::cout<<"res "<<current_resolution<<" itr "<<itr_ctr<<std::endl;
-
-    //    this->finalscore = score/NUMBER_OF_ACTIVE_CELLS;
 
     return ret;
 }
@@ -505,13 +391,6 @@ bool NDTMatcherD2D::update_gradient_hessian(
     bool computeHessian)
 {
 
-    /*
-        double lmax = 1;
-        if(fabsf(likelihood) > lmax) {
-    	return false;
-        }
-         */
-
     Eigen::MatrixXd Hloc(6, 6), sg(6, 1);
 
     Hloc.setZero();
@@ -546,23 +425,9 @@ bool NDTMatcherD2D::update_gradient_hessian(
         }
     }
     Q = 2 * xtBJ - xtBZBx;
-    /*
-    std::cout<<"Zest = ["<<Zest<<"];\n";
-    std::cout<<"Jest = ["<<Jest<<"];\n";
-    std::cout<<"Q = ["<<Q.transpose()<<"]';\n";
-    std::cout<<"xtBJ = ["<<xtBJ.transpose()<<"]';\n";
-    std::cout<<"xtBZBx = ["<<xtBZBx.transpose()<<"]';\n";
-    std::cout<<"Hest = ["<<Hest<<"];\n";
-    std::cout<<"ZHest = ["<<ZHest<<"];\n";
-    std::cout<<"xtBZBJ = ["<<xtBZBJ<<"];\n";
-    std::cout<<"xtBH = ["<<xtBH<<"];\n";
-    std::cout<<"xtBZBZBx = ["<<xtBZBZBx<<"];\n";
-    std::cout<<"xtBZhBx = ["<<xtBZhBx<<"];\n";
-    */
-    //double factor = -(lfd2/2)*pow(1 - pow(likelihood/lmax,2),2);
+
     double factor = -(lfd2 / 2) * likelihood;
     sg = Q * factor;
-    //    double weight = pow(1 - pow(likelihood,2),2)
     score_gradient += sg;
 
     if (computeHessian)
@@ -572,13 +437,6 @@ bool NDTMatcherD2D::update_gradient_hessian(
         //Hessian += Jest.transpose()*Jest;
     }
 
-    /*
-     std::cout<<"B = ["<<B<<"];\n x = ["<<x.transpose()<<"]';\n";
-     std::cout<<"l = "<<likelihood<<";\nscg = ["
-    <<sg.transpose()<<"]';\n H = ["
-    << Hloc<<"];\n H2 = ["<<Jest.transpose()*Jest<<"];\n H3 = ["
-    << sg*sg.transpose() <<"];\n";
-     */
     return true;
 }
 
@@ -803,8 +661,6 @@ double NDTMatcherD2D::scoreNDT(std::vector<NDTCell *> &sourceNDT, NDTMap &target
             }
             else
             {
-                //delete cell;
-                //std::cout << "had not gaussian!" << std::endl;
             }
         }
     }
@@ -828,8 +684,6 @@ double NDTMatcherD2D::scoreNDT_OM(NDTMap &sourceNDT, NDTMap &targetNDT)
     if (lz == NULL)
         return INT_MAX;
     std::vector<NDTCell *>::iterator it = lz->begin();
-
-    //std::vector<NDTCell<PointSource>*> source = sourceNDT.getAllInitializedCells();
 
     //for(unsigned int i=0; i<source.size(); i++) {
     while (it != lz->end())
@@ -902,27 +756,15 @@ double NDTMatcherD2D::scoreNDT_OM(NDTMap &sourceNDT, NDTMap &targetNDT)
             double cell_dist = std::sqrt(pow(cen1.x - cen2.x, 2) + pow(cen1.y - cen2.y, 2) + pow(cen1.z - cen2.z, 2));
             double lambda = 1 - cell_dist / (cell->getDiagonal());
             lambda = lambda < 0 ? 0 : importance_free * lambda;
-            //std::cout<<"lam "<<lambda<<" comp "<<-lambda*((1-o1)*(1-o2) - o1*(1-o2) -o2*(1-o1))<<std::endl;
             score_here += -lambda * ((1 - o1) * (1 - o2) - o1 * (1 - o2) - o2 * (1 - o1));
 
             //SWITCHME
-            //source->consistency_score += -lambda*((1-o1)*(1-o2) - o1*(1-o2) -o2*(1-o1));
             double ll = cell->isInside(cen2) ? 1 : 0;
-            //std::cout<<"j "<<j<<" sc "<<source->consistency_score<<" ll "<<ll<<" incr "<<ll*((1-o1)*(1-o2) - o1*(1-o2) -o2*(1-o1))<<std::endl;
             source->consistency_score += ll * ((1 - o1) * (1 - o2) - o1 * (1 - o2) - o2 * (1 - o1));
         }
         it++;
     }
-    //cleanup
-    /*
-    for(unsigned int i=0; i<source.size(); i++) {
-        if(source[i]==NULL) {
-    	continue;
-        }
-        delete source[i];
-        source[i] = NULL;
-    }
-    */
+
     return score_here;
 }
 
@@ -1124,15 +966,12 @@ double NDTMatcherD2D::derivativesNDT(
             Hessian_omp.block(0, n_dimensions * thread_id, n_dimensions, n_dimensions) += Hessian_omp_loc;
             score_here_omp(0, thread_id) += score_here_loc;
         }
-    } //end pragma block
-    //std::cout<<"sgomp: "<<score_gradient_omp<<std::endl;
-    //std::cout<<"somp: "<<score_here_omp<<std::endl;
+    }
 
     score_gradient = score_gradient_omp.rowwise().sum();
     score_here = score_here_omp.sum();
     if (computeHessian)
     {
-        //std::cout<<"Homp: "<<Hessian_omp<<std::endl;
         for (int i = 0; i < n_threads; ++i)
         {
             Hessian += Hessian_omp.block(0, n_dimensions * i, n_dimensions, n_dimensions);
@@ -1184,9 +1023,6 @@ double NDTMatcherD2D::derivativesNDT(
                 double sh = -lfd1 * (exp(-lfd2 * l / 2));
                 //compute Jest, Hest, Zest, ZHest
                 //update score gradient
-                //std::cout<<"m1 = ["<<meanMoving.transpose()<<"]';\n m2 = ["<<cell->getMean().transpose()<<"]';\n";
-                //std::cout<<"C1 = ["<<CMoving<<"];\n C2 = ["<<CFixed<<"];\n";
-                //		    if(!update_gradient_hessian(score_gradient, Hessian, transformed, Cinv, sh, computeHessian))
                 if (!update_gradient_hessian(score_gradient, Hessian, transformed, Cinv, sh, computeHessian))
                 {
                     //delete cell;
@@ -1200,51 +1036,7 @@ double NDTMatcherD2D::derivativesNDT(
         }
     }
 #endif
-    /*
-    if(computeHessian) {
 
-        //regularization 0.01*NUMBER_OF_ACTIVE_CELLS*
-        //Hessian = Hessian + 0.1*NUMBER_OF_ACTIVE_CELLS*Eigen::Matrix<double,6,6>::Identity();
-        Eigen::SelfAdjointEigenSolver<Eigen::Matrix<double,6,6> > Sol (Hessian);
-        Eigen::Matrix<double,6,1> evals = Sol.eigenvalues().real();
-
-        double minCoeff = evals.minCoeff();
-        double maxCoeff = evals.maxCoeff();
-
-        if(minCoeff < 0 ) { //evals.minCoeff() < 0.01*evals.maxCoeff()) {
-    	Eigen::Matrix<double,6,6> evecs = Sol.eigenvectors().real();
-    	double regularizer = 0.01*maxCoeff - minCoeff;
-    	Eigen::Matrix<double,6,1> reg;
-    	//ugly
-    	reg<<regularizer,regularizer,regularizer,regularizer,regularizer,regularizer;
-    	evals += reg;
-    	Eigen::Matrix<double,6,6> Lam;
-    	Lam = evals.asDiagonal();
-    	Hessian = evecs*Lam*(evecs.transpose());
-    	std::cerr<<"regularizing\n";
-        }
-        */
-    /*
-    if(minCoeff < 0.001*maxCoeff) {
-    Eigen::Matrix<double,6,6> evecs = Sol.eigenvectors().real();
-    for(int q=0;q<6;++q) {
-        if(evals(q) < 0.001*maxCoeff) {
-    	evals(q)=0.001*maxCoeff;
-        } else{
-    	break;
-        }
-    }
-    Eigen::Matrix<double,6,6> Lam;
-    Lam = evals.asDiagonal();
-    Hessian = evecs*Lam*(evecs.transpose());
-    std::cerr<<"BAD_HESSIAN\n";
-    }
-    }
-    */
-
-    //    gettimeofday(&tv_end,NULL);
-    //    double time_load = (tv_end.tv_sec-tv_start.tv_sec)*1000.+(tv_end.tv_usec-tv_start.tv_usec)/1000.;
-    //    std::cout<<"3D::: time derivatives took is: "<<time_load<<std::endl;
     return score_here;
 }
 
@@ -1281,19 +1073,6 @@ double NDTMatcherD2D::lineSearchMT(
 
     int info = 0;  // return code
     int infoc = 1; // return code for subroutine cstep
-
-    // Compute the initial gradient in the search direction and check
-    // that s is a descent direction.
-
-    //we want to maximize s, so we should minimize -s
-    //score_init = scoreNDT(sourceNDT,targetNDT);
-
-    //gradient directions are opposite for the negated function
-    //score_gradient_init = -score_gradient_init;
-
-    //  cout<<"score_init "<<score_init<<endl;
-    //  cout<<"score_gradient_init "<<score_gradient_init.transpose()<<endl;
-    //  cout<<"increment "<<increment.transpose()<<endl;
 
     score_gradient_here.setZero();
     score_init = derivativesNDT(sourceNDT, targetNDT, score_gradient_here, pseudoH, false);
@@ -1428,30 +1207,17 @@ double NDTMatcherD2D::lineSearchMT(
         double f = 0.0;
         score_gradient_here.setZero();
 
-        /*f = scoreNDT(sourceNDT,targetNDT,ps);
-        derivativesNDT(sourceNDT,targetNDT,ps,score_gradient_here,pseudoH,false);
-        std::cout<<"scg1  " <<score_gradient_here.transpose()<<std::endl;
-        */
-
         //option 2:
-        //f = scoreNDT(sourceNDTHere,targetNDT);
         f = derivativesNDT(sourceNDTHere, targetNDT, score_gradient_here, pseudoH, false);
-        //std::cout<<"scg2  " <<score_gradient_here.transpose()<<std::endl;
-
-        //cout<<"incr " <<pincr.transpose()<<endl;
-        //cout<<"score (f) "<<f<<endl;
 
         double dg = 0.0;
         scg_here = score_gradient_here;
         dg = increment.dot(scg_here);
 
-        //VALGRIND_CHECK_VALUE_IS_DEFINED(dg);
-        //cout<<"dg = "<<dg<<endl;
         nfev++;
 
         ///////////////////////////////////////////////////////////////////////////
 
-        //cout<<"consider step "<<stp<<endl;
         // Armijo-Goldstein sufficient decrease
         double ftest1 = finit + stp * dgtest;
         //cout<<"ftest1 is "<<ftest1<<endl;
@@ -1477,9 +1243,6 @@ double NDTMatcherD2D::lineSearchMT(
         bool sufficientDecreaseTest = false;
         sufficientDecreaseTest = (f <= ftest1); // Armijo-Golstein
 
-        //cout<<"ftest2 "<<gtol*(-dginit)<<endl;
-        //cout<<"sufficientDecrease? "<<sufficientDecreaseTest<<endl;
-        //cout<<"curvature ok? "<<(fabs(dg) <= gtol*(-dginit))<<endl;
         if ((sufficientDecreaseTest) && (fabs(dg) <= gtol * (-dginit)))
             info = 1; // Success!!!!
 
@@ -1488,24 +1251,14 @@ double NDTMatcherD2D::lineSearchMT(
             if (info != 1) // Line search failed
             {
                 // RPP add
-                // counter.incrementNumFailedLineSearches();
 
-                //if (recoveryStepType == Constant)
                 stp = recoverystep;
-
-                //newgrp.computeX(oldgrp, dir, stp);
-
-                //message = "(USING RECOVERY STEP!)";
             }
             else // Line search succeeded
             {
-                //message = "(STEP ACCEPTED!)";
             }
 
-            //print.printStep(nfev, stp, finit, f, message);
-
             // Returning the line search flag
-            //cout<<"LineSearch::"<<message<<" info "<<info<<endl;
             for (unsigned int i = 0; i < sourceNDTHere.size(); i++)
             {
                 if (sourceNDTHere[i] != NULL)
@@ -1517,7 +1270,6 @@ double NDTMatcherD2D::lineSearchMT(
         } // info != 0
 
         // RPP add
-        //counter.incrementNumIterations();
 
         // In the first stage we seek a step for which the modified
         // function has a nonpositive value and nonnegative derivative.
@@ -1810,161 +1562,6 @@ double NDTMatcherD2D::normalizeAngle(double a)
     return atan2(sin(a), cos(a));
 }
 
-/*
-void NDTMatcherD2D<PointSource,PointTarget>::generateScoreDebug(const char* out, pcl::PointCloud<pcl::PointXYZ>& fixed, pcl::PointCloud<pcl::PointXYZ>& moving) {
-
-    std::ofstream lg(out,std::ios_base::out);
-    int N_LINEAR = 100;
-    int N_ROT	 = 100;
-    //lfd1 = 1;
-    //lfd2 = 1;
-
-    cout<<"generating scores...\n";
-    for(current_resolution = 4; current_resolution>=0.5; current_resolution/=2) {
-	cout<<"res "<<current_resolution<<endl;
-	double lfc1,lfc2,lfd3;
-	double integral, outlier_ratio, support_size;
-	integral = 0.1;
-	outlier_ratio = 0.3;
-	support_size = current_resolution;
-	lfc1 = (1-outlier_ratio)/integral;
-	lfc2 = outlier_ratio/pow(support_size,3);
-	lfd3 = -log(lfc2);
-	lfd1 = -(-log( lfc1 + lfc2 ) - lfd3);
-	lfd2 = -log((-log( lfc1 * exp( -0.5 ) + lfc2 ) - lfd3 ) / -lfd1);
-
-	lfd1 = 1;//lfd1;
-	lfd2 = 0.05;//0.8*lfd2;
-
-	double lmin=-2, lmax=2, rmin=-M_PI/2, rmax=M_PI/2;
-	double lstep = (lmax-lmin)/(N_LINEAR-1);
-	double rstep = (rmax-rmin)/(N_ROT-1);
-	Eigen::MatrixXd S(6,N_LINEAR);
-	Eigen::Transform<double,3,Eigen::Affine,Eigen::ColMajor> T;
-	std::vector<NDTCell*> nextNDT;
-
-	LazzyGrid prototype(current_resolution);
-	NDTMap ndt( &prototype );
-	ndt.loadPointCloud( fixed );
-	ndt.computeNDTCells();
-
-	double z=0, r=0, pitch=0, yaw=0;
-	int k=0;
-	for(double x=lmin; x<lmax; x+=lstep) {
-	    T = Eigen::Translation<double,3>(x,0,0);
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(0,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-	k=0;
-	for(double x=lmin; x<lmax; x+=lstep) {
-	    T = Eigen::Translation<double,3>(0,x,0);
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(1,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-	k=0;
-	for(double x=lmin; x<lmax; x+=lstep) {
-	    T = Eigen::Translation<double,3>(0,0,x);
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(2,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-
-	k=0;
-	for(double r=rmin; r<rmax; r+=rstep) {
-	    T = Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitX()) *
-		Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitY()) *
-		Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitZ()) ;
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(3,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-	k=0;
-	for(double r=rmin; r<rmax; r+=rstep) {
-	    T = Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitX()) *
-		Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitY()) *
-		Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitZ()) ;
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(4,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-	k=0;
-	for(double r=rmin; r<rmax; r+=rstep) {
-	    T = Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitX()) *
-		Eigen::AngleAxis<double>(0,Eigen::Vector3d::UnitY()) *
-		Eigen::AngleAxis<double>(r,Eigen::Vector3d::UnitZ()) ;
-	    pcl::PointCloud<pcl::PointXYZ> cloud = moving;
-	    lslgeneric::transformPointCloudInPlace(T,cloud);
-	    NDTMap mov( &prototype );
-	    mov.loadPointCloud( cloud );
-	    mov.computeNDTCells();
-	    T.setIdentity();
-	    nextNDT = mov.pseudoTransformNDT(T);
-
-	    S(5,k) = scoreNDT(nextNDT,ndt);
-	    for(unsigned int i=0; i<nextNDT.size(); i++) {
-		if(nextNDT[i]!=NULL) delete nextNDT[i];
-	    }
-	    k++;
-	}
-
-	lg<<"Sf2f"<<(int)current_resolution<<" = ["<<S<<"];\n";
-    }
-    lg.close();
-
-}*/
-
 bool NDTMatcherD2D::covariance(NDTMap &targetNDT,
                                NDTMap &sourceNDT,
                                Eigen::Transform<double, 3, Eigen::Affine, Eigen::ColMajor> &T,
@@ -2073,17 +1670,10 @@ bool NDTMatcherD2D::covariance(NDTMap &targetNDT,
         }
     }
 
-    //cout<<Jdpdz.transpose()<<endl;
-
     Eigen::MatrixXd JK(6, 6);
     JK = sigmaS * Jdpdz.transpose() * Jdpdz;
 
-    //cout<<"J*J'\n"<<JK<<endl;
-    //cout<<"H\n"<<cov<<endl;
-
     cov = cov.inverse() * JK * cov.inverse();
-    //cov = cov.inverse();//*fabsf(scoreNDT(sourceNDTN,targetNDT)*2/3);
-    //cout<<"cov\n"<<cov<<endl;
 
     for (unsigned int q = 0; q < sourceNDTN.size(); q++)
     {

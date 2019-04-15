@@ -7,6 +7,8 @@ project(ndt_map)
 # Load catkin and all dependencies required for this package
 find_package(cmake_modules REQUIRED)
 find_package(Eigen REQUIRED)
+find_package(PCL 1.7 REQUIRED)
+
 find_package(catkin REQUIRED COMPONENTS cv_bridge roscpp pcl_ros pcl_conversions 
   std_msgs
   nav_msgs
@@ -23,10 +25,12 @@ generate_messages(
 )
 
 catkin_package(
-    DEPENDS eigen opencv2 libpcl-all-dev
+    DEPENDS eigen libpcl-all-dev
     CATKIN_DEPENDS cv_bridge message_runtime roscpp pcl_ros pcl_conversions 
     INCLUDE_DIRS include
     LIBRARIES ${PROJECT_NAME}
+    DEPENDS PCL
+
 )
 
 set (${PROJECT_NAME}_LIB_SRCS
@@ -48,7 +52,15 @@ add_executable(test_map_topic_1 test/test_map_topic_1.cpp)
 add_executable(ndt_builder test/ndtMapBuilder.cc)
 add_executable(test_occ_map_topic test/test_occ_map_topic.cpp)
 
-find_package(OpenCV REQUIRED)
+
+find_package(OpenCV 3.0 QUIET)
+if(NOT OpenCV_FOUND)
+    find_package(OpenCV 2.4.3 QUIET)
+    if(NOT OpenCV_FOUND)
+        message(FATAL_ERROR "OpenCV > 2.4.3 not found.")
+    endif()
+endif()
+
 include_directories(include ${catkin_INCLUDE_DIRS})
 include_directories(include ${EIGEN_INCLUDE_DIRS})
 include_directories(include ${PCL_INCLUDE_DIRS})
@@ -66,16 +78,16 @@ link_directories(${catkin_LIBRARY_DIRS})
 #make a node that listens to point clouds and makes ndts
 
 #target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
-target_link_libraries(histTest ${PROJECT_NAME} ${catkin_LIBRARIES})
+target_link_libraries(histTest ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
 #target_link_libraries(jffSaveTest ${catkin_LIBRARIES})
 #target_link_libraries(jffLoadTest ${catkin_LIBRARIES})
-target_link_libraries(test_map_topic ${PROJECT_NAME} ${catkin_LIBRARIES})
-target_link_libraries(test_map_topic_1 ${PROJECT_NAME} ${catkin_LIBRARIES})
-target_link_libraries(ndt_builder ${PROJECT_NAME} ${catkin_LIBRARIES})
-target_link_libraries(test_occ_map_topic ${PROJECT_NAME} ${catkin_LIBRARIES})
+target_link_libraries(test_map_topic ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(test_map_topic_1 ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(ndt_builder ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
+target_link_libraries(test_occ_map_topic ${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 add_dependencies(${PROJECT_NAME} ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES})
+target_link_libraries(${PROJECT_NAME} ${catkin_LIBRARIES} ${OpenCV_LIBS})
 
 #add_executable(likelihood_test test/ndtLikelihoodTester.cc)
 #target_link_libraries(likelihood_test ${PROJECT_NAME}  pointcloud_vrml)
